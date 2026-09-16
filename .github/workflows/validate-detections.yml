@@ -59,18 +59,26 @@ jobs:
       - name: Install dependencies (stdlib + pyyaml only)
         run: pip install pyyaml
 
-      # 3. Protected-path guard (defense-in-depth). Fail if the PR diff touches
-      #    any facilitator-owned path. Branch protection + CODEOWNERS is primary.
-      #    Uses the built-in GITHUB_BASE_REF env var (the PR target branch) — no
-      #    ${{ }} interpolation into the shell, so no script-injection surface.
+      # 3. Protected-path guard (defense-in-depth). Normal participant PRs may
+      #    never touch facilitator-owned paths. The sole exception is an onboarding
+      #    governance PR authored by MalikZiglam whose ENTIRE diff is exactly
+      #    .github/CODEOWNERS. This permits dynamic group ownership without making
+      #    validator, Terraform, baseline, or shared-fixture changes participant-editable.
       - name: Protected-path guard
         working-directory: pr
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
           CHANGED="$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD)"
           echo "Changed files:"; echo "$CHANGED"
-          BLOCKED="$(echo "$CHANGED" | grep -E '^(\.github/|terraform/|scripts/|detections/baseline/|tests/shared-fixtures/|CODEOWNERS)' || true)"
+          if [ "$PR_AUTHOR" = "MalikZiglam" ] && [ "$CHANGED" = ".github/CODEOWNERS" ]; then
+            echo "Approved onboarding-governance shape: MalikZiglam changed only .github/CODEOWNERS."
+            BLOCKED=""
+          else
+            BLOCKED="$(echo "$CHANGED" | grep -E '^(\.github/|terraform/|scripts/|detections/baseline/|tests/shared-fixtures/|CODEOWNERS)' || true)"
+          fi
           if [ -n "$BLOCKED" ]; then
             echo "::error::PR touches protected facilitator-owned paths:"
             echo "$BLOCKED"

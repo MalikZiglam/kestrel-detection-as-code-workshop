@@ -1,11 +1,17 @@
-# CODEOWNERS — facilitator-protected paths
+# CODEOWNERS — dynamic workshop ownership
 #
-# Enforcement note (spec S1 / §17.4): CODEOWNERS only blocks a merge when
-# branch protection "Require review from Code Owners" is ENABLED on main.
-# Without that setting this file is advisory only. See docs/BRANCH-PROTECTION.md.
+# Protected facilitator infrastructure remains owned by @MalikZiglam.
+# Participants receive Write access but never bypass rights.
 #
-# The @MalikZiglam handle below is a PLACEHOLDER. Replace it with the real
-# GitHub handle (or team) before the workshop.
+# ONBOARDING: after actual attendance and grouping are known, @MalikZiglam opens
+# one governance PR that adds exactly three ownership lines per group beneath the
+# marker below. List every member of that group on every line, for example:
+#
+# /assessments/team-01.md                 @alice @bob @charlie
+# /detections/workshop/team-01/           @alice @bob @charlie
+# /tests/workshop/team-01/                @alice @bob @charlie
+#
+# Do not pre-create a fixed number of groups. Do not encode a review ring.
 
 # Protected infrastructure and trusted validator logic
 /.github/                 @MalikZiglam
@@ -15,5 +21,8 @@
 /tests/shared-fixtures/   @MalikZiglam
 
 # The CODEOWNERS file protects itself
-/.github/CODEOWNERS        @MalikZiglam
-/CODEOWNERS                @MalikZiglam
+/.github/CODEOWNERS       @MalikZiglam
+/CODEOWNERS               @MalikZiglam
+
+# === DYNAMIC PARTICIPANT OWNERSHIP — generated from actual attendance ===
+# Add three exact-path entries per group here during onboarding.
