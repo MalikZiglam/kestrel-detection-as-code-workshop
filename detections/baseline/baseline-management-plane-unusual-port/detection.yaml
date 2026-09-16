@@ -1,0 +1,66 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): healthy production rule, network family.
+# NOT a solution to any of the 8 candidates — this is a generic port/exposure
+# rule and deliberately does NOT use network.bytes_out_10m (candidate #6) or
+# source.plane->destination.plane admin crossing (candidate #1).
+id: baseline-management-plane-unusual-port
+title: Inbound flow to management plane on a non-standard port
+status: production
+owner: detection-eng
+deployment:
+  enabled: true
+description: >
+  Fires when a network flow terminates in the management plane on a destination
+  port outside the small approved set (SSH 22, HTTPS 443). Management-plane
+  services should only expose known administrative ports; anything else is
+  either a misconfiguration or unauthorized exposure.
+business_rationale: >
+  The management plane controls cloud infrastructure and the Orders Portal
+  backend. Unexpected listening ports there widen the attack surface and often
+  precede exploitation of a forgotten or misconfigured service.
+evidence_refs:
+  - architecture/cloud-architecture.md
+  - logs/network/README.md
+telemetry_requirements:
+  - network family emits per-flow events with destination.port
+  - destination.plane populated on flows entering the management plane
+  - network.direction populated
+severity: medium
+log_source: network
+query: >
+  event.category: network
+  and network.direction: inbound
+  and destination.plane: management
+  and not destination.port: (22 or 443)
+mitre_attack:
+  tactics:
+    - TA0007   # Discovery
+  techniques:
+    - T1046     # Network Service Discovery
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids:
+    - network-traffic-flow
+false_positives:
+  - Approved maintenance window opening a temporary diagnostic port.
+  - New management-plane service whose port has not yet been added to the allow list.
+known_exceptions:
+  - Ports registered in the management-plane service catalogue (reviewed quarterly).
+investigation_guidance: >
+  Identify the destination.ip host and the listening service on destination.port.
+  Confirm whether the port is expected. Check source.ip and network.protocol for
+  the origin. If unexpected, close the port and review the host for unauthorized
+  services.
+tags:
+  - network
+  - exposure
+  - management-plane
+  - baseline
+test_cases:
+  positive:
+    - tests/shared-fixtures/baseline-management-plane-unusual-port/positive.ndjson
+  negative:
+    - tests/shared-fixtures/baseline-management-plane-unusual-port/negative.ndjson
+review_date: 2026-12-01

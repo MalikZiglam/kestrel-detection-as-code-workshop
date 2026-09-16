@@ -1,0 +1,1 @@
+{"@timestamp":"2024-11-12T08:12:45Z","event.id":"fixture-mgmtport-pos-01","event.action":"network_flow","event.category":"network","host.name":"api.ctrl.example","source.ip":"198.51.100.30","destination.ip":"192.0.2.10","destination.port":8443,"network.protocol":"tcp","network.direction":"inbound","network.bytes":11840,"source.plane":"corporate","destination.plane":"management"}

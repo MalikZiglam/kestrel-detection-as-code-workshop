@@ -1,0 +1,16 @@
+# terraform.tfvars.example — PLACEHOLDERS ONLY. Copy to terraform.tfvars
+# (gitignored) and fill real values, OR export TF_VAR_* env vars instead.
+# NEVER commit real endpoints or the API key.
+
+# Serverless endpoints (two distinct hosts).
+es_endpoint = "https://REPLACE-ME.es.<region>.elastic.cloud"
+kb_endpoint = "https://REPLACE-ME.kb.<region>.elastic.cloud"
+
+# Serverless API key (sensitive). Prefer TF_VAR_api_key over writing it here.
+api_key = "REPLACE-ME"
+
+# Facilitator-controlled family -> index patterns. Defaults already match the
+# Deployment Contract; override only if your cluster uses different patterns.
+# index_identity = "workshop-auth-*"
+# index_network  = "workshop-network-*"
+# index_cloud    = "workshop-cloud-*"

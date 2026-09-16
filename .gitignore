@@ -1,0 +1,17 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.env
+.env.*
+*.pem
+*.key
+*.crt
+terraform.rc
+.terraformrc
+# Any local credential/config files the implementation introduces.
+
+# Session/tooling scratch and Python bytecode — never part of the workshop tree.
+__pycache__/
+*.py[cod]

@@ -1,0 +1,80 @@
+# Fixture expectations (facilitator-owned, authoritative for runtime checks).
+#
+# Maps each fixture -> the baseline rule_id it exercises -> whether ingesting it
+# on the normal rule schedule SHOULD produce an alert carrying that fixture's
+# stable event.id. smoke_test.py reads this file: it correlates an alert by BOTH
+# kibana.alert.rule.rule_id AND the fixture's event.id (the proven spike pattern).
+#
+# NOTE on event_id: the `event_id:` below is the fixture's ORIGINAL id (a
+# documentation/correlation reference). At runtime, replay rewrites each event's
+# event.id with a unique per-run token and preserves the original as
+# workshop.original_event_id; the alert is correlated on that unique run id at
+# smoke-test time.
+#
+# expected_alert: true  -> positive fixture; an alert MUST appear within the bound.
+# expected_alert: false -> negative/control; NO alert may carry this event.id.
+#
+# Non-circularity: these fixtures are scenario evidence, not copies of the query.
+# See README.md "The non-circularity rule".
+#
+# Identifiers are documentation-safe (RFC 5737 IPs, .example hosts). No index or
+# endpoint is named here or in any fixture; the family->index mapping is
+# facilitator-controlled and resolved by replay_events.py (S5, §22.2).
+
+version: "1.0"
+
+fixtures:
+  # --- identity: baseline-privileged-password-only-auth (production, enabled) ---
+  - path: tests/shared-fixtures/baseline-privileged-password-only-auth/positive.ndjson
+    rule_id: baseline-privileged-password-only-auth
+    log_source: identity
+    event_id: fixture-priv-auth-pos-01
+    expected_alert: true
+    why: >
+      Privileged admin account authenticated with a password (single factor).
+      Scenario evidence of a strong-auth policy breach on a privileged account.
+  - path: tests/shared-fixtures/baseline-privileged-password-only-auth/negative.ndjson
+    rule_id: baseline-privileged-password-only-auth
+    log_source: identity
+    event_id: fixture-priv-auth-neg-01
+    expected_alert: false
+    why: >
+      Same privileged admin, same host, authenticated with MFA. Benign look-alike:
+      strong factor present, so the policy is satisfied and no alert is expected.
+
+  # --- cloud: baseline-object-store-policy-change (production, enabled) ---
+  - path: tests/shared-fixtures/baseline-object-store-policy-change/positive.ndjson
+    rule_id: baseline-object-store-policy-change
+    log_source: cloud
+    event_id: fixture-objstore-pos-01
+    expected_alert: true
+    why: >
+      Access policy of the order-data object store was modified (SetBucketPolicy).
+      Scenario evidence of a control-plane change that can expose stored records.
+  - path: tests/shared-fixtures/baseline-object-store-policy-change/negative.ndjson
+    rule_id: baseline-object-store-policy-change
+    log_source: cloud
+    event_id: fixture-objstore-neg-01
+    expected_alert: false
+    why: >
+      Routine object write (PutObject) to the same bucket by the approved
+      replicator service. Same resource, ordinary data-plane activity, no policy
+      change, so no alert is expected.
+
+  # --- network: baseline-management-plane-unusual-port (production, enabled) ---
+  - path: tests/shared-fixtures/baseline-management-plane-unusual-port/positive.ndjson
+    rule_id: baseline-management-plane-unusual-port
+    log_source: network
+    event_id: fixture-mgmtport-pos-01
+    expected_alert: true
+    why: >
+      Inbound flow terminating in the management plane on port 8443, outside the
+      approved set (22, 443). Scenario evidence of unexpected management exposure.
+  - path: tests/shared-fixtures/baseline-management-plane-unusual-port/negative.ndjson
+    rule_id: baseline-management-plane-unusual-port
+    log_source: network
+    event_id: fixture-mgmtport-neg-01
+    expected_alert: false
+    why: >
+      Inbound flow to the same management host on port 22 (approved SSH). Same
+      path and plane crossing, but an allowed port, so no alert is expected.

@@ -1,0 +1,120 @@
+# =============================================================================
+# FOUNDATION detection template  (highly guided)
+# =============================================================================
+# This template is for participants with little or no coding/Git experience.
+# It is the SAME deployable schema as the Engineering template
+# (WORKSHOP_SPEC.md §14) — only the amount of hand-holding differs.
+#
+# HOW TO USE
+#   1. Copy this file to:  detections/workshop/<team-id>/detection.yaml
+#      (e.g. detections/workshop/team-01/detection.yaml)
+#   2. Fill in ONLY the three blanks marked  # >>> FILL THIS IN <<< .
+#      Everything else is pre-filled so you can see a working example.
+#   3. Change the placeholder values (id, owner, title) to your team's use case.
+#
+# RULES YOU CANNOT BREAK
+#   - Do NOT invent log fields. Use ONLY fields documented in
+#     logs/field-dictionary.md (the "Fields by family" tables).
+#   - Declare ONLY log_source (a family). NEVER add index, data_view, endpoint,
+#     credentials, or a destination — the facilitator mapping resolves those.
+#     See docs/DEPLOYMENT-CONTRACT.md.
+#   - The query language is KQL (the single canonical language). One rule = one
+#     KQL query.
+#
+# ALLOWED VALUES (copy the exact spelling)
+#   status:    draft | test | production | deprecated | not_detectable
+#   severity:  low | medium | high | critical
+#   log_source (family): identity | network | cloud | application | admin | endpoint
+#
+# AVAILABLE LOG FIELDS  (full list + meanings: logs/field-dictionary.md)
+#   Common (every family): @timestamp, event.id, event.action, event.outcome,
+#                          event.category, host.name
+#   identity:    user.name, source.ip, user.roles, authentication.method,
+#                authentication.privileged,
+#                workshop.enrichment.failed_logins_same_source_5m
+#   network:     source.ip, destination.ip, destination.port, network.protocol,
+#                network.direction, network.bytes, network.bytes_out_10m,
+#                source.plane, destination.plane
+#   cloud:       cloud.api_operation, cloud.resource.type, cloud.resource.id,
+#                cloud.actor.principal, cloud.actor.type, iam.change.type,
+#                iam.target.principal
+#   application: client.address, url.path, http.request.method,
+#                http.response.status_code, application.name, user.name
+#   admin:       admin.action, source.plane, destination.plane, user.name
+#   endpoint:    process.name, process.command_line   (sparse — not every host)
+#
+#   Address quirk: identity + network call the client address `source.ip`;
+#   application calls the SAME thing `client.address`. Use the name that belongs
+#   to your chosen family.
+# =============================================================================
+
+id: teamNN-slug                       # e.g. team01-privileged-login-review (must be unique)
+title: Privileged login from an unexpected source   # rename to your use case
+status: test                          # start at 'test' so it can deploy once reviewed
+owner: team-NN                        # your team id, e.g. team-01
+
+deployment:
+  enabled: true                       # deploys ONLY if true AND status is test/production
+
+description: >
+  Detects a successful privileged authentication. Rewrite this sentence to
+  describe exactly what YOUR rule looks for.
+
+business_rationale: >
+  Privileged accounts control critical systems, so unexpected privileged logins
+  are high-value to review. Rewrite to explain why YOUR organization cares.
+
+evidence_refs:                        # where in the repo the idea came from
+  - evidence/threat-brief.md          # replace with the evidence you used
+  - logs/authentication/README.md
+
+telemetry_requirements:               # what must be in the logs for this to work
+  - identity events include event.outcome
+  - authentication.privileged is populated on privileged accounts
+
+severity:                             # >>> FILL THIS IN <<<  (low | medium | high | critical)
+
+log_source: identity                  # family only — see the allowed list above
+
+# The query. The structure is written for you. Add the ONE missing condition.
+# Fields must come from the identity family above. Example predicate you might
+# add:  authentication.privileged: true
+query: >
+  event.category: authentication
+  and event.action: authentication_success
+  and                                 # >>> FILL THIS IN <<<  (one condition using an identity field)
+
+mitre_attack:                         # starting suggestion — confirm it fits your rule
+  tactics:
+    - TA0001                          # Initial Access (suggested starting point)
+  techniques:
+    - T1078                           # Valid Accounts (suggested starting point)
+  subtechniques: []                   # add a sub-technique if one fits (optional)
+
+detection_strategy:
+  ids: []                             # optional for Foundation — leave empty if unsure
+data_components:
+  ids: []                             # optional for Foundation — leave empty if unsure
+
+false_positives:                      # normal activity that could trigger it
+  - A privileged admin logging in during their normal working hours.
+
+known_exceptions: []                  # accounts/situations you deliberately allow
+
+investigation_guidance: >
+  Check user.name and source.ip. Is this account expected to log in from this
+  place at this time? Rewrite for YOUR rule.
+
+tags:
+  - identity
+  - foundation
+
+test_cases:                           # references into your team fixtures folder
+  positive:
+    # An event that SHOULD trigger the rule. A worked example is provided.
+    - tests/workshop/team-NN/positive.ndjson
+  negative:
+    # An event that should NOT trigger the rule.
+    - # >>> FILL THIS IN <<<  (path to your negative fixture, e.g. tests/workshop/team-NN/negative.ndjson)
+
+review_date: 2026-12-31               # YYYY-MM-DD — when this rule should be re-checked

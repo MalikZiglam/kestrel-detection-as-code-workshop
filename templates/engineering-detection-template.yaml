@@ -1,0 +1,48 @@
+# ENGINEERING detection template (less constrained).
+#
+# Same deployable schema as the Foundation template (WORKSHOP_SPEC.md §14); the
+# only difference is depth of guidance. You do the engineering:
+#   - read the raw logs and logs/field-dictionary.md; pick the family and fields;
+#   - choose the ATT&CK tactic/technique (and sub-technique / Detection Strategy /
+#     Data Components where they fit);
+#   - author the KQL query yourself (single canonical language, one query);
+#   - create or select fixtures under tests/workshop/<team-id>/*.
+#
+# Constraints (same as Foundation):
+#   - use ONLY fields documented in logs/field-dictionary.md; do not invent fields;
+#   - declare ONLY log_source (a family) — NEVER index, data_view, endpoint,
+#     credentials, or a destination; the facilitator mapping resolves family->index
+#     (see docs/DEPLOYMENT-CONTRACT.md);
+#   - deploys IFF status is in {test, production} AND deployment.enabled is true.
+#
+# Copy to: detections/workshop/<team-id>/detection.yaml . Fill every field.
+
+id: teamNN-slug
+title:
+status: draft                         # draft | test | production | deprecated | not_detectable
+owner: team-NN
+deployment:
+  enabled: false
+description:
+business_rationale:
+evidence_refs: []
+telemetry_requirements: []
+severity:                             # low | medium | high | critical
+log_source:                           # family only
+query: ""                             # canonical KQL query authored by the team
+mitre_attack:
+  tactics: []
+  techniques: []
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids: []
+false_positives: []
+known_exceptions: []
+investigation_guidance:
+tags: []
+test_cases:
+  positive: []
+  negative: []
+review_date:                          # YYYY-MM-DD

@@ -1,0 +1,79 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): INTENTIONALLY NOISY rule for the tuning /
+# rollback discussion. NOT a solution to any of the 8 candidates. It fires on
+# every authentication failure with no threshold or enrichment — the opposite
+# of the tuned candidate #2 approach — precisely so participants can discuss
+# why it is unusable as-is and how enrichment/thresholds fix it.
+#
+# Deployment decision (per Deployment Contract §20.2 recommended semantics):
+# a noisy rule deploys ONLY if intentionally required for the demo. It is NOT
+# required to deploy for this teaching purpose, so deployment.enabled is false.
+# Kept as status: production (schema-valid and deployable-capable) to show that
+# "in Git and production-status" does NOT imply "deployed" — enabled=false gates
+# it out. Flip enabled to true only if the demo intentionally needs live noise.
+id: baseline-all-auth-failures
+title: Any authentication failure (noisy — tuning example)
+status: production
+owner: detection-eng
+deployment:
+  enabled: false
+description: >
+  Fires on every authentication failure regardless of count, source, or account.
+  Deliberately untuned: no threshold and no use of the
+  workshop.enrichment.failed_logins_same_source_5m enrichment field. Serves as
+  the worked example for alert-fatigue, thresholding, and enrichment discussion.
+business_rationale: >
+  Failed logins can indicate credential attacks, but a single failure is normal
+  user behavior. Alerting on all of them buries analysts. The business value is
+  as a teaching artifact for why tuning and enrichment matter, not as a live
+  detection.
+evidence_refs:
+  - logs/authentication/README.md
+telemetry_requirements:
+  - identity family emits authentication events with event.outcome
+tuning_notes:
+  problem: >
+    No threshold and no correlation; every failed login alerts. Expected volume
+    is far above triage capacity for a 3-person team.
+  recommended_tuning: >
+    Gate on the enrichment field, e.g. failed_logins_same_source_5m >= a chosen
+    threshold, and/or scope to privileged accounts, before enabling.
+  rollback: >
+    If enabled and it floods, set deployment.enabled back to false — the rollback
+    teaching moment (see docs/rollback-explained.md).
+severity: low
+log_source: identity
+query: >
+  event.category: authentication
+  and event.action: authentication_failure
+mitre_attack:
+  tactics:
+    - TA0006   # Credential Access
+  techniques:
+    - T1110     # Brute Force
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids:
+    - user-account-authentication
+false_positives:
+  - Ordinary user mistyping a password (dominant volume — the core problem).
+  - Expired session prompting a single re-auth failure.
+known_exceptions: []
+investigation_guidance: >
+  Not recommended for live triage in its current form. If investigating, pivot
+  to source.ip and user.name and check
+  workshop.enrichment.failed_logins_same_source_5m to judge whether the failure
+  is part of a burst rather than an isolated typo.
+tags:
+  - identity
+  - noisy
+  - tuning-example
+  - baseline
+test_cases:
+  positive:
+    - tests/shared-fixtures/baseline-all-auth-failures/positive.ndjson
+  negative:
+    - tests/shared-fixtures/baseline-all-auth-failures/negative.ndjson
+review_date: 2026-12-01

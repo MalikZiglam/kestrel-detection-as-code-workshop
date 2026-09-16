@@ -1,0 +1,64 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): healthy production rule, cloud family.
+# NOT a solution to any of the 8 candidates — targets object-store exposure,
+# NOT StopLogStream/log_stream (candidate #3) and NOT iam.change.type /
+# iam.target.principal grants (candidate #4).
+id: baseline-object-store-policy-change
+title: Object-store access policy modified
+status: production
+owner: detection-eng
+deployment:
+  enabled: true
+description: >
+  Fires on a cloud control-plane operation that changes the access policy of an
+  object_store resource (e.g. SetBucketPolicy). Policy changes on the storage
+  holding order data can silently make private objects reachable and must be
+  reviewed.
+business_rationale: >
+  Object storage backs the Orders Portal and holds business records. An access
+  policy loosening is a leading cause of data exposure; catching the change at
+  the control plane lets the team confirm intent before data leaks.
+evidence_refs:
+  - business-context/critical-services.md
+  - logs/cloud-audit/README.md
+telemetry_requirements:
+  - cloud family emits cloud.api_operation and cloud.resource.type
+  - cloud.actor.principal populated
+severity: high
+log_source: cloud
+query: >
+  event.category: iam
+  and cloud.resource.type: object_store
+  and cloud.api_operation: ("SetBucketPolicy" or "PutBucketAcl")
+mitre_attack:
+  tactics:
+    - TA0005   # Defense Evasion
+  techniques:
+    - T1578     # Modify Cloud Compute Infrastructure
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids:
+    - cloud-service-modification
+false_positives:
+  - Planned infrastructure-as-code deployment changing a bucket policy (change ticket exists).
+  - Routine lifecycle-policy update by an approved automation principal.
+known_exceptions:
+  - Object-store policy changes attributed to the approved IaC service principal during a scheduled deploy.
+investigation_guidance: >
+  Identify cloud.actor.principal and cloud.actor.type. Confirm a change ticket
+  exists and the new policy does not grant public or broad access to
+  cloud.resource.id. If unauthorized, revert the policy and review recent access
+  to the affected object store.
+tags:
+  - cloud
+  - data-exposure
+  - object-store
+  - baseline
+test_cases:
+  positive:
+    - tests/shared-fixtures/baseline-object-store-policy-change/positive.ndjson
+  negative:
+    - tests/shared-fixtures/baseline-object-store-policy-change/negative.ndjson
+review_date: 2026-12-01

@@ -1,0 +1,90 @@
+# =============================================================================
+# validate-detections — SAFE PR CI for untrusted participant detections
+# =============================================================================
+# Maps to the three validation levels (WORKSHOP_SPEC §18/§19):
+#   L1 STRUCTURAL  ) run here — offline, deterministic, no secrets
+#   L2 SEMANTIC    )
+#   L3 RUNTIME     ) NOT here — proven post-merge in the facilitator-controlled
+#                    Elastic env (scripts/replay_events.py + verify_baseline.py).
+#
+# TRUST BOUNDARY (honors every constraint in the original stub / §17.4):
+#   - Trigger is pull_request, NOT pull_request_target: participant-controlled
+#     code never runs with repo secrets.
+#   - GitHub-hosted ubuntu-latest runner (not self-hosted).
+#   - permissions: contents: read only. No deployment secrets exist at PR time.
+#   - The VALIDATOR is checked out from the BASE ref (trusted default branch)
+#     into a separate path and run against the PR working tree, which is treated
+#     strictly as DATA (safe_load). PR-head scripts are never executed.
+#   - Defense-in-depth protected-path guard fails the PR if it touches
+#     facilitator-owned paths. Primary control is branch protection + CODEOWNERS
+#     (docs/BRANCH-PROTECTION.md).
+#   - Third-party actions are pinned to commit SHAs. We use only first-party
+#     actions/* here; still SHA-pinned so a moved tag cannot inject code.
+
+name: validate-detections
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. PR working tree (participant DATA). Full history so we can diff vs base.
+      - name: Checkout PR data (untrusted — data only)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+          path: pr
+
+      # 2. Trusted validator + reference data from the BASE branch (NOT PR head).
+      #    We run THIS code, never the participant's copy of it. github.base_ref
+      #    is the PR target branch name (e.g. main) — a trusted ref, and not a
+      #    shell context, so it cannot inject commands.
+      - name: Checkout trusted validator from base branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (stdlib + pyyaml only)
+        run: pip install pyyaml
+
+      # 3. Protected-path guard (defense-in-depth). Fail if the PR diff touches
+      #    any facilitator-owned path. Branch protection + CODEOWNERS is primary.
+      #    Uses the built-in GITHUB_BASE_REF env var (the PR target branch) — no
+      #    ${{ }} interpolation into the shell, so no script-injection surface.
+      - name: Protected-path guard
+        working-directory: pr
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD)"
+          echo "Changed files:"; echo "$CHANGED"
+          BLOCKED="$(echo "$CHANGED" | grep -E '^(\.github/|terraform/|scripts/|detections/baseline/|tests/shared-fixtures/|CODEOWNERS)' || true)"
+          if [ -n "$BLOCKED" ]; then
+            echo "::error::PR touches protected facilitator-owned paths:"
+            echo "$BLOCKED"
+            exit 1
+          fi
+          echo "No protected paths touched."
+
+      # 4. Run the TRUSTED base-ref validator against PR DATA. The validator
+      #    CODE and its reference data (field dictionary + ATT&CK subset) come
+      #    from base/ (trusted); the detection DATA globbed by --all comes from
+      #    pr/ via --data-root. Participants cannot swap the reference data to
+      #    weaken L2, and the protected-path guard above already blocks PR edits
+      #    to scripts/, so main always runs base's copy of the validator.
+      - name: Validate detections (L1 structural + L2 semantic)
+        run: |
+          set -euo pipefail
+          python3 base/scripts/validate_detections.py --all --data-root pr --format text

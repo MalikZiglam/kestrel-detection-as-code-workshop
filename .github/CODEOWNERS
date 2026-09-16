@@ -1,0 +1,19 @@
+# CODEOWNERS — facilitator-protected paths
+#
+# Enforcement note (spec S1 / §17.4): CODEOWNERS only blocks a merge when
+# branch protection "Require review from Code Owners" is ENABLED on main.
+# Without that setting this file is advisory only. See docs/BRANCH-PROTECTION.md.
+#
+# The @MalikZiglam handle below is a PLACEHOLDER. Replace it with the real
+# GitHub handle (or team) before the workshop.
+
+# Protected infrastructure and trusted validator logic
+/.github/                 @MalikZiglam
+/terraform/               @MalikZiglam
+/scripts/                 @MalikZiglam
+/detections/baseline/     @MalikZiglam
+/tests/shared-fixtures/   @MalikZiglam
+
+# The CODEOWNERS file protects itself
+/.github/CODEOWNERS        @MalikZiglam
+/CODEOWNERS                @MalikZiglam

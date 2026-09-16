@@ -1,0 +1,318 @@
+# Canonical Workshop Field Dictionary (machine-readable)
+# Authoritative for static field-reference validation (WORKSHOP_SPEC.md §9, §14).
+# CI validates participant detection.yaml field references against this file.
+#
+# ALL identifiers here are documentation-safe and synthetic:
+#   hostnames: *.example / example.com   (RFC 6761 reserved)
+#   IPv4:      192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24  (RFC 5737)
+#   IPv6:      2001:db8::/32  (RFC 3849)
+# No real Internet assets appear anywhere in this dictionary or the log corpus.
+#
+# Family -> index mapping is FACILITATOR-CONTROLLED (S5). Participants declare
+# only `log_source: <family>` and NEVER an index. See docs/DEPLOYMENT-CONTRACT.md.
+
+meta:
+  version: "1.0"
+  ecs_alignment: "ECS-inspired; ECS-style names used where natural. Not full ECS."
+  authoritative_for:
+    - static field-reference validation in CI
+    - the allowed `log_source` enum a detection may declare
+  teaching_note: >
+    Detection capability depends not only on raw logs, but also on normalization
+    and enrichment. Fields under `workshop.enrichment.*` and the periodic
+    flow-summary fields are produced by a fictional UPSTREAM telemetry pipeline,
+    not by the detection rule itself.
+
+# ---------------------------------------------------------------------------
+# ALLOWED log_source ENUM
+# ---------------------------------------------------------------------------
+# A detection's schema `log_source:` field MUST be exactly one of these family
+# identifiers. This enum is the single source of truth for §14 schema validation.
+log_source_enum:
+  - identity        # identity / authentication events
+  - network         # network / firewall / flow events (incl. periodic flow summary)
+  - cloud           # cloud control-plane API events
+  - application     # Tier-1 application access events
+  - admin           # administrative-activity events
+  - endpoint        # OPTIONAL endpoint / process events (present but sparse)
+
+# Which families currently map to a deployable index (facilitator-controlled).
+# Families without a mapping are used for evidence/telemetry reasoning and
+# assessment; they are not wired to a deployable index in this workshop build.
+family_index_mapping:
+  note: >
+    Facilitator-controlled. Participants NEVER name an index. The replay script
+    resolves family -> index and ignores any target field in a participant fixture.
+  mapped:
+    identity: "workshop-auth-*"
+    network: "workshop-network-*"
+    cloud: "workshop-cloud-*"
+  unmapped_in_this_build:
+    - application    # reasoned about via app-access logs; facilitator may map later
+    - admin          # administrative-activity evidence; facilitator may map later
+    - endpoint       # optional/sparse; facilitator may map later
+
+# ---------------------------------------------------------------------------
+# ADDRESS-REPRESENTATION QUIRK (deliberate, documented — §9)
+# ---------------------------------------------------------------------------
+# Two families represent the same "who connected from where" concept with
+# DIFFERENT field names. This is realistic messiness. It is fair because it is
+# documented here: a detection that reasons about source address must use the
+# field name belonging to the family it targets.
+address_representation_quirk:
+  identity_family_uses: "source.ip"       # auth events carry source.ip
+  application_family_uses: "client.address"  # app-access events carry client.address
+  network_family_uses: "source.ip"        # network/flow events carry source.ip
+  guidance: >
+    identity and network encode the source address as `source.ip`.
+    application encodes the SAME concept as `client.address`. A cross-family
+    query cannot assume one field name. Choose the field name of the target
+    family. CI rejects `source.ip` referenced against an application-only rule
+    and `client.address` referenced against an identity-only rule.
+
+# ---------------------------------------------------------------------------
+# TELEMETRY GAP (deliberate — candidate #7, §24)
+# ---------------------------------------------------------------------------
+# Secrets-management AUDIT events are NOT present in ANY family. There is no
+# field carrying secrets-audit actor / operation / target-secret. This is the
+# deliberate non-detectable candidate. The correct engineering outcome is a
+# telemetry-onboarding requirement, not an invented detection.
+telemetry_gaps:
+  secrets_management_audit:
+    availability: "not available"
+    missing_events:
+      - secrets-audit actor identity
+      - secrets-audit operation (read/write/rotate/delete)
+      - secrets-audit target secret identifier
+    supports_candidate: 7
+    correct_outcome: >
+      status: not_detectable; recommend onboarding secrets-management audit logs
+      before any detection is written. Do NOT invent secrets-audit fields.
+
+# ---------------------------------------------------------------------------
+# FIELDS
+# ---------------------------------------------------------------------------
+# Each field: name, type, families[], meaning, guaranteed (true=always present
+# on events of that family; false=optional/conditional). `enrichment: true`
+# marks upstream-pipeline-produced fields (G3), not raw log content.
+fields:
+
+  # --- Common (present across all event families) ---------------------------
+  - name: "@timestamp"
+    type: date
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Event time (ISO 8601, UTC). Replay rewrites this into the rule window."
+    guaranteed: true
+  - name: event.id
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Unique event identifier."
+    guaranteed: true
+  - name: event.action
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Normalized action, e.g. authentication_success, flow_summary, iam_role_assigned."
+    guaranteed: true
+  - name: event.outcome
+    type: keyword
+    families: [identity, cloud, application, admin]
+    meaning: "success | failure | unknown."
+    guaranteed: true
+  - name: event.category
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Coarse class, e.g. authentication, network, iam, process."
+    guaranteed: true
+  - name: host.name
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Host emitting or targeted by the event (e.g. edge-gw.example, app- orders.example)."
+    guaranteed: true
+  - name: workshop.scenario_id
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Replay-added correlation tag identifying the scenario. Absent in raw fixtures until replay."
+    guaranteed: false
+  - name: workshop.team_id
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Replay-added team tag (e.g. team-01). Absent until replay."
+    guaranteed: false
+  - name: workshop.test_case
+    type: keyword
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Replay-added positive|negative label. Absent until replay."
+    guaranteed: false
+  - name: workshop.original_timestamp
+    type: date
+    families: [identity, network, cloud, application, admin, endpoint]
+    meaning: "Original fixture time preserved when replay rewrites @timestamp."
+    guaranteed: false
+
+  # --- identity / authentication family -------------------------------------
+  - name: user.name
+    type: keyword
+    families: [identity, application, admin]
+    meaning: "Account presented, e.g. svc-replicator, j.okafor (all fictional)."
+    guaranteed: true
+  - name: source.ip
+    type: ip
+    families: [identity, network]
+    meaning: "Client source address. identity + network use this name (see quirk)."
+    guaranteed: true
+  - name: user.roles
+    type: keyword
+    families: [identity]
+    meaning: "Roles asserted at authentication, e.g. admin, operator, read-only."
+    guaranteed: false
+  - name: authentication.method
+    type: keyword
+    families: [identity]
+    meaning: "password | mfa | api_key | sso."
+    guaranteed: false
+  - name: authentication.privileged
+    type: boolean
+    families: [identity]
+    meaning: "True if the account is privileged (supports candidate #2 targeting)."
+    guaranteed: false
+  - name: "workshop.enrichment.failed_logins_same_source_5m"
+    type: integer
+    families: [identity]
+    enrichment: true
+    meaning: >
+      UPSTREAM-ENRICHMENT. Count of failed logins from the same source.ip in the
+      preceding 5 minutes, stamped onto each auth event by the fictional pipeline.
+      Enables candidate #2 as a single-doc KQL predicate:
+      event.action: authentication_success AND
+      workshop.enrichment.failed_logins_same_source_5m >= 5.
+    guaranteed: false
+
+  # --- network / firewall / flow family -------------------------------------
+  - name: destination.ip
+    type: ip
+    families: [network]
+    meaning: "Flow destination address."
+    guaranteed: true
+  - name: destination.port
+    type: integer
+    families: [network]
+    meaning: "Flow destination port."
+    guaranteed: true
+  - name: network.protocol
+    type: keyword
+    families: [network]
+    meaning: "tcp | udp | icmp."
+    guaranteed: false
+  - name: network.direction
+    type: keyword
+    families: [network]
+    meaning: "inbound | outbound | internal."
+    guaranteed: false
+  - name: network.bytes
+    type: integer
+    families: [network]
+    meaning: "Bytes observed for a single flow event."
+    guaranteed: false
+  - name: "network.bytes_out_10m"
+    type: integer
+    families: [network]
+    enrichment: true
+    meaning: >
+      UPSTREAM-ENRICHMENT on the periodic flow-summary event
+      (event.action: flow_summary). Total outbound bytes per source over a rolling
+      10-minute window, computed by the fictional pipeline. Enables candidate #6
+      (bulk outbound transfer) to reason about volume in a single document.
+    guaranteed: false
+
+  # --- cloud control-plane API family ---------------------------------------
+  - name: cloud.api_operation
+    type: keyword
+    families: [cloud]
+    meaning: "Control-plane operation, e.g. StopLogStream, PutRolePolicy (fictional names)."
+    guaranteed: true
+  - name: cloud.resource.type
+    type: keyword
+    families: [cloud]
+    meaning: "Target resource type, e.g. log_stream, iam_role, object_store."
+    guaranteed: true
+  - name: cloud.resource.id
+    type: keyword
+    families: [cloud]
+    meaning: "Target resource identifier (fictional)."
+    guaranteed: false
+  - name: cloud.actor.principal
+    type: keyword
+    families: [cloud]
+    meaning: "Principal performing the API call (user or service account)."
+    guaranteed: true
+  - name: cloud.actor.type
+    type: keyword
+    families: [cloud]
+    meaning: "user | service_account."
+    guaranteed: false
+  - name: iam.change.type
+    type: keyword
+    families: [cloud]
+    meaning: "role_assigned | policy_attached | permission_granted (supports candidate #4)."
+    guaranteed: false
+  - name: iam.target.principal
+    type: keyword
+    families: [cloud]
+    meaning: "Principal receiving the IAM change (supports candidate #4)."
+    guaranteed: false
+
+  # --- application access family (Tier-1 business app) ----------------------
+  - name: client.address
+    type: ip
+    families: [application]
+    meaning: "Source address of an app-access request. Application uses THIS name, not source.ip (see quirk)."
+    guaranteed: true
+  - name: url.path
+    type: keyword
+    families: [application]
+    meaning: "Requested application path, e.g. /orders/export."
+    guaranteed: true
+  - name: http.request.method
+    type: keyword
+    families: [application]
+    meaning: "GET | POST | PUT | DELETE."
+    guaranteed: false
+  - name: http.response.status_code
+    type: integer
+    families: [application]
+    meaning: "HTTP status returned by the Tier-1 app."
+    guaranteed: false
+  - name: application.name
+    type: keyword
+    families: [application]
+    meaning: "Application identifier, e.g. orders-portal (the Tier-1 service)."
+    guaranteed: true
+
+  # --- administrative activity family ---------------------------------------
+  - name: admin.action
+    type: keyword
+    families: [admin]
+    meaning: "Administrative action, e.g. ssh_session_open, config_change."
+    guaranteed: true
+  - name: source.plane
+    type: keyword
+    families: [admin, network]
+    meaning: "Originating trust plane: corporate | workload | management (supports candidate #1)."
+    guaranteed: false
+  - name: destination.plane
+    type: keyword
+    families: [admin, network]
+    meaning: "Target trust plane. A corporate/workload -> management crossing is notable (candidate #1)."
+    guaranteed: false
+
+  # --- optional endpoint / process family -----------------------------------
+  - name: process.name
+    type: keyword
+    families: [endpoint]
+    meaning: "Process image name. OPTIONAL family; present only on select hosts."
+    guaranteed: false
+  - name: process.command_line
+    type: keyword
+    families: [endpoint]
+    meaning: "Process command line. Sparse; not guaranteed."
+    guaranteed: false

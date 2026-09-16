@@ -1,0 +1,56 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): INCOMPLETE / DRAFT rule showing work in
+# progress. MUST NOT deploy. NOT a solution to any of the 8 candidates.
+# Intentionally unfinished: the query predicate and severity are still open, and
+# the endpoint family is sparse — a realistic "not ready yet" artifact.
+id: baseline-endpoint-suspicious-process
+title: Suspicious process on management host (DRAFT)
+status: draft
+owner: detection-eng
+deployment:
+  enabled: false
+description: >
+  Draft idea: flag suspicious process executions on management-plane hosts (e.g.
+  interpreters or transfer tools launched outside change windows). Not finished:
+  the endpoint family is sparse and present on only select hosts, so coverage
+  and the exact process list are still under investigation.
+business_rationale: >
+  Process visibility on management hosts would strengthen detection of hands-on
+  activity, but the value is unproven until endpoint telemetry coverage is
+  confirmed.
+evidence_refs:
+  - architecture/cloud-architecture.md
+telemetry_requirements:
+  - endpoint family emits process.name (SPARSE — not on every host; coverage TBD)
+  - process.command_line where available (not guaranteed)
+open_questions:
+  - Which management hosts actually emit endpoint/process telemetry?
+  - What is the allowed baseline of admin tooling to avoid false positives?
+  - Is process.command_line populated often enough to be useful?
+severity: TBD                        # not yet decided — draft
+log_source: endpoint
+query: ""                            # TODO: predicate over process.name / process.command_line once coverage is confirmed
+mitre_attack:
+  tactics:
+    - TA0002   # Execution
+  techniques:
+    - T1059     # Command and Scripting Interpreter
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids: []                            # TODO once telemetry confirmed
+false_positives:
+  - Legitimate administrative tooling (list not yet enumerated — why this is draft).
+known_exceptions: []
+investigation_guidance: >
+  Draft; not deployable. Do not triage. Finish telemetry-coverage assessment
+  before authoring the query.
+tags:
+  - endpoint
+  - draft
+  - baseline
+test_cases:
+  positive: []                       # TODO: no fixtures yet — draft
+  negative: []
+review_date: 2026-10-15

@@ -1,0 +1,67 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): show a healthy production rule with full
+# lifecycle metadata. NOT a solution to any of the 8 workshop candidates —
+# this is generic authentication hygiene, distinct from candidate #2
+# (failed-then-success burst) and candidate #8 (noisy service accounts).
+id: baseline-privileged-password-only-auth
+title: Privileged account authenticated without MFA
+status: production
+owner: detection-eng
+deployment:
+  enabled: true
+description: >
+  Fires when a privileged account completes an interactive authentication using
+  a password (or api_key) instead of MFA/SSO. Privileged access is expected to
+  present a strong factor; a password-only privileged login is a policy
+  violation worth reviewing.
+business_rationale: >
+  Privileged accounts govern the management plane and Tier-1 Orders Portal.
+  Single-factor privileged access materially raises account-takeover risk and
+  breaches the internal strong-auth standard for privileged roles.
+evidence_refs:
+  - business-context/critical-services.md
+  - logs/authentication/README.md
+telemetry_requirements:
+  - identity family emits authentication_success with event.outcome
+  - authentication.privileged populated on privileged accounts
+  - authentication.method populated (password | mfa | api_key | sso)
+severity: high
+log_source: identity
+query: >
+  event.category: authentication
+  and event.action: authentication_success
+  and authentication.privileged: true
+  and authentication.method: ("password" or "api_key")
+mitre_attack:
+  tactics:
+    - TA0001   # Initial Access
+  techniques:
+    - T1078     # Valid Accounts
+  subtechniques:
+    - T1078.004 # Valid Accounts: Cloud Accounts
+detection_strategy:
+  ids: []
+data_components:
+  ids:
+    - user-account-authentication
+false_positives:
+  - Break-glass account used during an MFA-provider outage (expected, time-boxed).
+  - Automation account legitimately using api_key where MFA is not applicable.
+known_exceptions:
+  - Documented break-glass account during declared incidents.
+investigation_guidance: >
+  Confirm the account (user.name) is genuinely privileged and whether MFA was
+  expected. Check source.ip and user.roles for an unfamiliar origin or elevated
+  role. If unexpected, force re-enrollment of MFA and review recent activity for
+  the account.
+tags:
+  - identity
+  - authentication
+  - policy-violation
+  - baseline
+test_cases:
+  positive:
+    - tests/shared-fixtures/baseline-privileged-password-only-auth/positive.ndjson
+  negative:
+    - tests/shared-fixtures/baseline-privileged-password-only-auth/negative.ndjson
+review_date: 2026-12-01

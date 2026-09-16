@@ -1,0 +1,61 @@
+# Baseline catalogue example (facilitator-owned). ORIGINAL fictional content.
+# Purpose (WORKSHOP_SPEC.md §11): DEPRECATED rule demonstrating lifecycle and
+# retirement. Kept in Git for history/teaching; MUST NOT deploy. NOT a solution
+# to any of the 8 candidates.
+id: baseline-icmp-sweep-legacy
+title: ICMP host sweep (legacy, retired)
+status: deprecated
+owner: detection-eng
+deployment:
+  enabled: false
+description: >
+  Legacy rule that fired on inbound ICMP flows, intended to catch host-discovery
+  sweeps. Retired: modern discovery rarely relies on ICMP here, and routine
+  monitoring/health-check ICMP produced overwhelming noise. Superseded by
+  baseline-management-plane-unusual-port for exposure concerns.
+business_rationale: >
+  Historically meant to surface reconnaissance. Retained only to document why it
+  was retired and to illustrate a deprecation decision for the workshop.
+evidence_refs:
+  - logs/network/README.md
+telemetry_requirements:
+  - network family emits per-flow events with network.protocol
+deprecation:
+  reason: >
+    High false-positive volume from health-check and monitoring ICMP; low true-
+    positive yield. Replaced by port-exposure and flow-volume rules.
+  superseded_by: baseline-management-plane-unusual-port
+  retired_on: 2026-08-15
+severity: low
+log_source: network
+query: >
+  event.category: network
+  and network.protocol: icmp
+  and network.direction: inbound
+mitre_attack:
+  tactics:
+    - TA0007   # Discovery
+  techniques:
+    - T1018     # Remote System Discovery
+  subtechniques: []
+detection_strategy:
+  ids: []
+data_components:
+  ids:
+    - network-traffic-flow
+false_positives:
+  - Infrastructure health checks and uptime monitoring using ICMP (dominant, why it was retired).
+known_exceptions: []
+investigation_guidance: >
+  Rule is retired and disabled. No triage expected. If similar visibility is
+  needed, use the active exposure and outbound-volume rules instead.
+tags:
+  - network
+  - deprecated
+  - baseline
+test_cases:
+  positive:
+    - tests/shared-fixtures/baseline-icmp-sweep-legacy/positive.ndjson
+  negative:
+    - tests/shared-fixtures/baseline-icmp-sweep-legacy/negative.ndjson
+review_date: 2026-08-15
