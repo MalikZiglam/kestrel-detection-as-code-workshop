@@ -1,26 +1,48 @@
-# Branch Protection & Protected Paths (facilitator setup)
+# Branch Protection, Dynamic CODEOWNERS, and Protected Paths
 
-Required GitHub settings for `main`. Do NOT apply remote settings without human
-approval. Mirrors `WORKSHOP_SPEC.md` §17.3/§17.4.
+The active `Protect main` ruleset requires a pull request, two approvals, Code
+Owner review, and the `validate-detections/validate` status check. Force pushes
+and branch deletion are blocked.
 
-## Required `main` branch-protection settings
+## Dynamic participant ownership
 
-- Disallow direct push to `main`.
-- Require a pull request before merging.
-- Require status checks to pass (the `validate-detections` workflow).
-- Require review from Code Owners.
-- Separate deployment permissions from contribution permissions.
+Attendance and group count are decided at onboarding time. Do not pre-create a
+fixed number of team directories and do not encode a fixed review ring.
 
-**Enforcement note (S1):** CODEOWNERS only blocks a merge when "Require review
-from Code Owners" is ENABLED. Path protection depends on this setting. The
-in-workflow diff check is defense-in-depth, not the primary control.
+For each actual group, assign a namespace such as `team-01` and add three exact
+CODEOWNERS entries listing every group member:
 
-Set the real facilitator handle in `.github/CODEOWNERS` (placeholder is
-`@MalikZiglam`) before the workshop.
+```text
+/assessments/team-01.md                 @alice @bob @charlie
+/detections/workshop/team-01/           @alice @bob @charlie
+/tests/workshop/team-01/                @alice @bob @charlie
+```
 
-## Protected paths (authoritative)
+One member may author the PR; other group members may approve it. Participants
+may also review other groups. Merge still requires two non-author approvals, at
+least one Code Owner approval, and green CI.
 
-Any participant PR touching these fails immediately:
+## Facilitator onboarding-governance path
+
+`.github/CODEOWNERS` protects itself, so onboarding uses a tightly controlled
+facilitator path:
+
+1. `MalikZiglam` creates a branch and changes only `.github/CODEOWNERS`.
+2. The CI guard permits that exact author/path combination and rejects mixed or
+   participant-authored protected-path changes.
+3. The active ruleset grants only GitHub user `MalikZiglam` pull-request-only
+   bypass. A PR is still required; this is not direct-push bypass.
+4. Malik reviews the diff in the PR and uses the bypass merge for this onboarding
+   governance change only.
+
+GitHub rulesets cannot scope a bypass actor to one file, so the CI exception and
+this documented operating restriction provide the file-level scope. No
+participant is a bypass actor.
+
+## Protected facilitator infrastructure
+
+Normal participant PRs touching any of these paths fail CI and require the
+facilitator as Code Owner:
 
 ```text
 .github/
@@ -29,21 +51,25 @@ scripts/
 detections/baseline/
 tests/shared-fixtures/
 CODEOWNERS
-facilitator-owned configuration
 ```
+
+The only CI exception is the onboarding PR described above. It does not permit
+changes to the workflow, scripts, Terraform, baseline detections, or shared
+fixtures.
 
 ## Participant-editable paths
 
 ```text
-assessments/<team-id>.md
-detections/workshop/<team-id>/detection.yaml
-tests/workshop/<team-id>/*
+assessments/<group-id>.md
+detections/workshop/<group-id>/detection.yaml
+tests/workshop/<group-id>/*
 ```
+
+Participants create these paths on their own branches after namespaces are
+assigned. Core CI, validation, and Terraform use wildcard discovery and do not
+depend on the number of groups.
 
 ## Deployment credentials
 
-Never store Elastic/Terraform credentials as ordinary repo secrets reachable by
-participant branch workflows. Prefer facilitator-local Terraform deployment, or a
-protected GitHub Environment restricted to the trusted deployment workflow /
-default branch with facilitator approval. Participants must never invoke
-Elastic/Terraform credentials from an arbitrary branch.
+Elastic and Terraform credentials remain facilitator-local. Participant PR CI is
+credentialless and never deploys.
