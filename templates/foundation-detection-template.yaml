@@ -8,16 +8,21 @@
 # HOW TO USE
 #   1. Copy this file to:  detections/workshop/<team-id>/detection.yaml
 #      (e.g. detections/workshop/team-01/detection.yaml)
-#   2. Fill in ONLY the three blanks marked  # >>> FILL THIS IN <<< .
-#      Everything else is pre-filled so you can see a working example.
+#   2. Make every edit in the REQUIRED EDITS list below. A copy FAILS CI until
+#      all of them are done. Everything in the OPTIONAL list is pre-filled with a
+#      working example you can keep for a first rule.
 #   3. Change the placeholder values (id, owner, title) to your team's use case.
 #
 # REQUIRED EDITS — a copy WILL FAIL CI until you do all of these:
-#   [ ] id            unique, lowercase a-z 0-9 and dashes (rename teamNN-slug)
+#   [ ] id            unique, lowercase a-z 0-9 and dashes (rename teamNN-slug,
+#                     e.g. team01-privileged-login-review)
 #   [ ] severity      pick one: low | medium | high | critical  (blank fails CI)
-#   [ ] query         add the one missing condition (remove the trailing `and`)
-#   [ ] positive.ndjson  create tests/workshop/<team>/positive.ndjson (>=1 event)
-#   [ ] negative.ndjson  create it AND fill the negative reference below (blank fails CI)
+#   [ ] query         add the one missing condition (replace the trailing `and`)
+#   [ ] test_cases paths  change team-NN to your real team id in BOTH the positive
+#                     and negative references below
+#   [ ] positive.ndjson  create tests/workshop/<team>/positive.ndjson (exactly one event)
+#   [ ] negative.ndjson  create tests/workshop/<team>/negative.ndjson (exactly one
+#                     event) AND fill the negative reference below (blank fails CI)
 #   Deployable means status is test/production AND deployment.enabled: true, on a
 #   MAPPED family (identity | network | cloud). Foundation ships on identity.
 #

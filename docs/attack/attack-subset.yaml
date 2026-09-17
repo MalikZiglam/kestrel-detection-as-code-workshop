@@ -22,7 +22,9 @@
 
 meta:
   framework: "MITRE ATT&CK for Enterprise"
-  attack_version: "v16.1"          # pinned release used to author this subset
+  attack_version: "v16.1"          # pinned release this subset was authored from;
+                                   # intentional pin, NOT a claim to be the current
+                                   # release. Existence checks run against this version.
   pinned_on: "2026-09-16"          # date this local subset was pinned
   source: "https://attack.mitre.org (offline snapshot; not fetched at CI time)"
   determinism_note: >
