@@ -1,3 +1,84 @@
-# Phase 2 content — no detection authored yet.
-# Example team slot for team-05. Participants copy a template from templates/ here as
-# detections/workshop/team-05/detection.yaml. Placeholder keeps the slot in git.
+# =============================================================================
+# TEAM 05 — DETECTION WORKSPACE
+# =============================================================================
+# Work directly in this file.
+#
+# Start in draft mode while you investigate and design.
+#
+# Before your Pull Request is ready:
+#   1. Replace the title and description with your selected use case.
+#   2. Update severity.
+#   3. Set log_source to the telemetry family you are using.
+#   4. Replace the example query with your detection logic.
+#   5. Add the evidence files that support your detection.
+#   6. Create:
+#        tests/workshop/team-05/positive.ndjson
+#        tests/workshop/team-05/negative.ndjson
+#   7. When ready for validation/deployment, change:
+#        status: test
+#        deployment.enabled: true
+#
+# Use only fields documented in logs/field-dictionary.md.
+# Do not specify indices, endpoints, credentials, or Elastic targets.
+# =============================================================================
+
+id: team05-draft-detection
+
+title: Team 05 detection — replace with selected use case
+
+status: draft
+
+owner: team-05
+
+deployment:
+  enabled: false
+
+description: >
+  Replace this text with a precise description of the behavior this detection
+  is intended to identify.
+
+business_rationale: >
+  Replace this text with the business or security impact of detecting this
+  behavior.
+
+evidence_refs: []
+
+telemetry_requirements: []
+
+severity: medium
+
+log_source: identity
+
+query: >
+  event.category: authentication
+  and event.action: authentication_success
+
+mitre_attack:
+  tactics: []
+  techniques: []
+  subtechniques: []
+
+detection_strategy:
+  ids: []
+
+data_components:
+  ids: []
+
+false_positives: []
+
+known_exceptions: []
+
+investigation_guidance: >
+  Describe what an analyst should inspect after this rule generates an alert.
+
+tags:
+  - workshop
+  - team-05
+
+test_cases:
+  positive:
+    - tests/workshop/team-05/positive.ndjson
+  negative:
+    - tests/workshop/team-05/negative.ndjson
+
+review_date: "2026-12-31"
