@@ -1,20 +1,58 @@
-title: Successful Privileged Authentication After Multiple Failures
-id: 3e2f5f08-8c84-4ef7-a15f-auth-bruteforce
+name: Successful Privileged Authentication After Multiple Failures
+id: auth-success-after-failures-admin
 
-logsource:
+status: production
+owner: leon.rohde
+
+description: >
+  Detects a successful authentication of a privileged account after
+  multiple failed authentication attempts from the same source.
+
+severity: high
+
+review_date: 2026-12-31
+
+deployment:
+  enabled: true
+
+log_source:
   product: custom
-  category: authentication
+  service: identity-provider
+  dataset: authentication
 
-detection:
-  selection:
-    event.action: authentication_success
-    authentication.privileged: true
-    workshop.enrichment.failed_logins_same_source_5m|gte: 5
+mitre_attack:
+  tactics:
+    - Credential Access
+    - Persistence
+  techniques:
+    - T1110
+    - T1078
 
-  condition: selection
+query: |
+  event.action = "authentication_success"
+  AND authentication.privileged = true
+  AND workshop.enrichment.failed_logins_same_source_5m >= 5
 
-level: high
+test_cases:
+  positive:
+    - name: Admin login after brute force
+      event:
+        "@timestamp": "2024-11-12T08:05:09Z"
+        event.action: "authentication_success"
+        authentication.privileged: true
+        workshop.enrichment.failed_logins_same_source_5m: 6
 
-tags:
-  - attack.t1078
-  - attack.t1110
+  negative:
+    - name: Normal MFA admin login
+      event:
+        "@timestamp": "2024-11-12T07:31:44Z"
+        event.action: "authentication_success"
+        authentication.privileged: true
+        workshop.enrichment.failed_logins_same_source_5m: 0
+
+    - name: Non privileged user success
+      event:
+        "@timestamp": "2024-11-12T07:56:40Z"
+        event.action: "authentication_success"
+        authentication.privileged: false
+        workshop.enrichment.failed_logins_same_source_5m: 2
