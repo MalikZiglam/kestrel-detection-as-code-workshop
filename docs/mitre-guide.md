@@ -1,6 +1,6 @@
 # MITRE ATT&CK Guide
 
-MITRE ATT&CK is the primary framework for this workshop (WORKSHOP_SPEC §15). Each
+MITRE ATT&CK is the primary framework for this workshop. Each
 detection maps to a tactic, a technique (optionally a sub-technique), and — where
 they fit — a Detection Strategy and Data Components. A correct technique ID with
 no supporting telemetry is NOT a strong detection.
@@ -19,7 +19,7 @@ baseline example rules.
 
 ## Deterministic check vs human/AI judgment (the boundary)
 
-This split is a core teaching point (WORKSHOP_SPEC §19.1 vs §19.3).
+This split is a core teaching point.
 
 | Question | Who answers | Where |
 |---|---|---|

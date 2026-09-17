@@ -168,10 +168,17 @@ def load_field_dictionary(path: str) -> dict:
         name = entry["name"]
         field_families[name] = set(entry.get("families", []))
         field_types[name] = entry.get("type", "")
+    # Families that map to a deployable index are the SINGLE trusted source in
+    # family_index_mapping.mapped (facilitator-controlled). A deployable rule on
+    # a family NOT listed here has nowhere to deploy (L2 failure below). Derive
+    # the set here so there is never a second, drifting copy of the mapping.
+    mapping = doc.get("family_index_mapping") or {}
+    mapped_families = set((mapping.get("mapped") or {}).keys())
     return {
         "families": families,
         "field_families": field_families,
         "field_types": field_types,
+        "mapped_families": mapped_families,
     }
 
 
@@ -218,6 +225,107 @@ def is_deployable(rule: dict) -> bool:
     return status in DEPLOYABLE_STATUSES and enabled
 
 
+def _check_fixture_list(value: object, case: str, l1: LevelResult) -> None:
+    """A deployable rule's test_cases.<case> must be a non-empty list of
+    non-empty path strings. A bare scalar (e.g. one path without a `- `) or a
+    non-string entry is rejected — those are the common authoring mistakes that
+    would otherwise pass a truthiness check and then break replay."""
+    if not value:
+        l1.fail(f"deployable rule missing {case} fixture reference")
+        return
+    if not isinstance(value, list):
+        l1.fail(
+            f"test_cases.{case} must be a YAML list of path strings, not "
+            f"{type(value).__name__} (start each path with '- ')"
+        )
+        return
+    for i, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            l1.fail(f"test_cases.{case}[{i}] must be a non-empty path string (got {item!r})")
+
+
+def _expected_fixture_prefix(detection_path: str, data_root: str) -> str | None:
+    """The fixture subtree a rule's fixtures must live under, by rule location.
+
+    Participant rules (detections/workshop/<ns>/) own tests/workshop/<ns>/.
+    Facilitator baselines (detections/baseline/<slug>/) use tests/shared-fixtures/.
+    Returns None if the path is not under a known detections subtree (then only
+    generic checks apply)."""
+    rel = os.path.relpath(detection_path, data_root).replace(os.sep, "/")
+    parts = rel.split("/")
+    if len(parts) >= 3 and parts[0] == "detections" and parts[1] == "workshop":
+        return f"tests/workshop/{parts[2]}/"
+    if len(parts) >= 3 and parts[0] == "detections" and parts[1] == "baseline":
+        return "tests/shared-fixtures/"
+    return None
+
+
+def validate_fixture_refs(rule: dict, detection_path: str, data_root: str, l1: LevelResult) -> None:
+    """Validate that a DEPLOYABLE rule's fixture references resolve to real,
+    correctly-shaped ndjson files INSIDE the data root's expected subtree.
+
+    Structural only (L1): the file must exist, be a regular file, end in
+    .ndjson, sit under the rule's owning fixture subtree, hold >=1 non-empty
+    line, and every non-empty line must parse as a JSON OBJECT. This never
+    executes a fixture and never evaluates KQL — it proves the reference is a
+    usable ndjson event file, nothing about whether the rule fires (that is L3).
+    """
+    tc = rule.get("test_cases")
+    if not isinstance(tc, dict):
+        return  # shape already failed above
+    prefix = _expected_fixture_prefix(detection_path, data_root)
+    root_abs = os.path.abspath(data_root)
+    for case in ("positive", "negative"):
+        refs = tc.get(case)
+        if not isinstance(refs, list):
+            continue  # list-shape already failed in _check_fixture_list
+        for ref in refs:
+            if not isinstance(ref, str) or not ref.strip():
+                continue  # already failed in _check_fixture_list
+            ref = ref.strip()
+            if not ref.endswith(".ndjson"):
+                l1.fail(f"{case} fixture {ref!r} must be a .ndjson file")
+                continue
+            if prefix is not None and not ref.startswith(prefix):
+                l1.fail(f"{case} fixture {ref!r} must live under {prefix}")
+                continue
+            abs_ref = os.path.abspath(os.path.join(data_root, ref))
+            # containment: never escape the data root (no ../ traversal)
+            if os.path.commonpath([root_abs, abs_ref]) != root_abs:
+                l1.fail(f"{case} fixture {ref!r} resolves outside the repository")
+                continue
+            if not os.path.exists(abs_ref):
+                l1.fail(f"{case} fixture {ref!r} does not exist")
+                continue
+            if not os.path.isfile(abs_ref):
+                l1.fail(f"{case} fixture {ref!r} is not a regular file")
+                continue
+            _check_fixture_content(abs_ref, ref, case, l1)
+
+
+def _check_fixture_content(abs_ref: str, ref: str, case: str, l1: LevelResult) -> None:
+    """>=1 non-empty line, each non-empty line a JSON object. No execution."""
+    try:
+        with open(abs_ref, encoding="utf-8") as fh:
+            nonempty = 0
+            for lineno, raw in enumerate(fh, 1):
+                s = raw.strip()
+                if not s:
+                    continue
+                nonempty += 1
+                try:
+                    obj = json.loads(s)
+                except json.JSONDecodeError as exc:
+                    l1.fail(f"{case} fixture {ref!r} line {lineno} is not valid JSON: {exc}")
+                    continue
+                if not isinstance(obj, dict):
+                    l1.fail(f"{case} fixture {ref!r} line {lineno} is not a JSON object")
+        if nonempty == 0:
+            l1.fail(f"{case} fixture {ref!r} has no event lines")
+    except OSError as exc:
+        l1.fail(f"{case} fixture {ref!r} cannot be read: {exc}")
+
+
 # --------------------------------------------------------------------------- #
 # LEVEL 1 — STRUCTURAL
 # --------------------------------------------------------------------------- #
@@ -243,8 +351,17 @@ def validate_l1(path: str, raw: str, seen_ids: dict[str, str], res: FileResult) 
     for key in REQUIRED_KEYS:
         if key not in rule:
             l1.fail(f"missing required key: {key}")
-    if not isinstance(rule.get("deployment"), dict) or "enabled" not in (rule.get("deployment") or {}):
+    dep = rule.get("deployment")
+    if not isinstance(dep, dict) or "enabled" not in (dep or {}):
         l1.fail("deployment.enabled missing")
+    elif not isinstance(dep.get("enabled"), bool):
+        # A YAML string "true"/"false" is truthy regardless of value and would
+        # silently mis-gate deployment. Require a real boolean.
+        l1.fail(
+            f"deployment.enabled must be a YAML boolean true/false, not "
+            f"{type(dep.get('enabled')).__name__} {dep.get('enabled')!r} "
+            "(remove the quotes: enabled: true)"
+        )
     tc = rule.get("test_cases")
     if not isinstance(tc, dict) or "positive" not in tc or "negative" not in tc:
         l1.fail("test_cases must define positive and negative")
@@ -292,10 +409,8 @@ def validate_l1(path: str, raw: str, seen_ids: dict[str, str], res: FileResult) 
     if deployable:
         if not query_str:
             l1.fail("deployable rule has empty query")
-        if not pos:
-            l1.fail("deployable rule missing positive fixture reference")
-        if not neg:
-            l1.fail("deployable rule missing negative fixture reference")
+        _check_fixture_list(pos, "positive", l1)
+        _check_fixture_list(neg, "negative", l1)
 
     # participant YAML must NOT declare infra routing (§14 / S5)
     for forbidden in ("index", "data_view", "endpoint", "destination", "credentials"):
@@ -320,6 +435,24 @@ def validate_l2(rule: dict, fd: dict, attack: dict, res: FileResult) -> None:
     if family not in fd["families"]:
         l2.fail(f"log_source {family!r} is not a defined family {sorted(fd['families'])}")
         family = None  # can't do family-scoped field checks
+
+    # DEPLOYABILITY x TELEMETRY MAPPING.
+    # A rule marked deployable (status test/production AND deployment.enabled true)
+    # must target a family that maps to a deployable index. Only the families in
+    # the field dictionary's family_index_mapping.mapped (identity/network/cloud
+    # in this build) have somewhere to deploy. A deployable rule on an unmapped
+    # family (application/admin/endpoint) cannot ship — the correct move is to
+    # keep it non-deployable (draft/not_detectable, enabled:false) and request
+    # telemetry onboarding, exactly like the candidate #7 gap. This is a teaching
+    # failure, not a shape error: L1 can be perfect and this still fails.
+    if family is not None and is_deployable(rule) and family not in fd["mapped_families"]:
+        l2.fail(
+            f"deployable rule targets family {family!r}, which is NOT mapped to a "
+            f"deployable index in this build (mapped: {sorted(fd['mapped_families'])}). "
+            "A deployable rule needs a mapped family. Either target a mapped family, "
+            "or keep this non-deployable (status draft/not_detectable, "
+            "deployment.enabled false) and onboard telemetry for this family first."
+        )
 
     # field-dictionary contract over the query
     query = rule.get("query")
@@ -374,7 +507,7 @@ def deployable_glob(data_root: str) -> list[str]:
     return files
 
 
-def validate_files(paths: list[str], levels: str) -> list[FileResult]:
+def validate_files(paths: list[str], levels: str, data_root: str) -> list[FileResult]:
     fd = load_field_dictionary(FIELD_DICT_PATH)
     attack = load_attack_subset(ATTACK_SUBSET_PATH)
     seen_ids: dict[str, str] = {}
@@ -395,6 +528,9 @@ def validate_files(paths: list[str], levels: str) -> list[FileResult]:
         if res.skipped_placeholder:
             results.append(res)
             continue
+        # Fixture references resolve against the DATA root (L1, deployable only).
+        if levels in {"1", "all"} and rule is not None and is_deployable(rule):
+            validate_fixture_refs(rule, path, data_root, res.l1)
         if levels in {"2", "all"}:
             if rule is None:
                 res.l2.skipped = True
@@ -528,7 +664,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write("no detection files matched\n")
         return 2
 
-    results, attack = validate_files(paths, args.level)
+    results, attack = validate_files(paths, args.level, data_root)
     if args.format == "json":
         text, any_fail = render_json(results, attack, args.level, data_root)
     else:

@@ -1,6 +1,6 @@
 # Critical Services — Kestrel Freight Cloud
 
-> Fictional and synthetic (WORKSHOP_SPEC.md §7.1). All names, accounts, and
+> Fictional and synthetic. All names, accounts, and
 > identifiers are invented. Documentation-safe identifiers only.
 
 ## Company profile

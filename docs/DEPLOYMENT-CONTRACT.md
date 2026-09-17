@@ -1,7 +1,7 @@
 # Detection Deployment Contract (AUTHORITATIVE)
 
 Single source of truth for where deployable rules live, what participants may
-edit, and when a file deploys. Mirrors `WORKSHOP_SPEC.md` §20.2. `detections/`,
+edit, and when a file deploys. `detections/`,
 `terraform/`, and CI reference this file rather than restating its rules.
 
 ```text

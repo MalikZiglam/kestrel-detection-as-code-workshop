@@ -18,7 +18,7 @@ human should decide.
 - determine whether CI passes — the deterministic validator decides pass/fail;
 - invent telemetry that does not exist — if a field or event is not in the field
   dictionary, the answer is a telemetry-onboarding requirement, not a fabricated
-  field (see the missing-telemetry scenario, `WORKSHOP_SPEC.md` §24);
+  field;
 - auto-merge a pull request;
 - be the sole approval to deploy — deployment requires human review;
 - replace the deterministic ATT&CK / field / schema checks — those are code, not

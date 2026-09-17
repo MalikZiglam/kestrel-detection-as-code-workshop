@@ -94,8 +94,8 @@ can never satisfy the check.
 
 - **No destination index, endpoint, or data stream.** The family→index mapping
   is facilitator-controlled; `replay_events.py` resolves `log_source` → index and
-  ignores any target/index/destination field in a fixture (S5, `WORKSHOP_SPEC.md`
-  §22.2, `docs/DEPLOYMENT-CONTRACT.md`).
+  ignores any target/index/destination field in a fixture (see
+  `docs/DEPLOYMENT-CONTRACT.md`).
 - **No real identifiers.** Hosts are `*.example`; IPs are RFC 5737
   (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`). Everything is synthetic.
 

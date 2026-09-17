@@ -12,6 +12,21 @@
 #      Everything else is pre-filled so you can see a working example.
 #   3. Change the placeholder values (id, owner, title) to your team's use case.
 #
+# REQUIRED EDITS — a copy WILL FAIL CI until you do all of these:
+#   [ ] id            unique, lowercase a-z 0-9 and dashes (rename teamNN-slug)
+#   [ ] severity      pick one: low | medium | high | critical  (blank fails CI)
+#   [ ] query         add the one missing condition (remove the trailing `and`)
+#   [ ] positive.ndjson  create tests/workshop/<team>/positive.ndjson (>=1 event)
+#   [ ] negative.ndjson  create it AND fill the negative reference below (blank fails CI)
+#   Deployable means status is test/production AND deployment.enabled: true, on a
+#   MAPPED family (identity | network | cloud). Foundation ships on identity.
+#
+# OPTIONAL (safe to leave as-is for a first working rule):
+#   owner/title wording, description, business_rationale, evidence_refs,
+#   telemetry_requirements, mitre_attack (suggestions pre-filled), tags,
+#   detection_strategy/data_components ids, false_positives, known_exceptions,
+#   investigation_guidance, review_date.
+#
 # RULES YOU CANNOT BREAK
 #   - Do NOT invent log fields. Use ONLY fields documented in
 #     logs/field-dictionary.md (the "Fields by family" tables).
@@ -79,10 +94,15 @@ log_source: identity                  # family only — see the allowed list abo
 # The query. The structure is written for you. Add the ONE missing condition.
 # Fields must come from the identity family above. Example predicate you might
 # add:  authentication.privileged: true
+#
+# EDIT THE QUERY: the block below ends with a dangling `and`. Replace that last
+# `and` with `and <your one condition>` (e.g. `and authentication.privileged: true`).
+# Do NOT write instructions inside the query block — everything under `query:` is
+# the literal rule text, not a comment.
 query: >
   event.category: authentication
   and event.action: authentication_success
-  and                                 # >>> FILL THIS IN <<<  (one condition using an identity field)
+  and
 
 mitre_attack:                         # starting suggestion — confirm it fits your rule
   tactics:

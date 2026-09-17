@@ -1,12 +1,7 @@
 # Scenario
 
 > **Everything here is fictional and synthetic.** No real company, person, IP,
-> hostname, or system is represented. See `WORKSHOP_SPEC.md` §7.
-
-> **Fictional org name pending human sign-off (§38 item 3):** **Kestrel Freight
-> Cloud**. "Kestrel" is a coined word chosen to avoid collision with a real
-> firm. Confirm no real-world collision before any public release. Network access
-> was unavailable during authoring, so the collision check has not been performed.
+> hostname, or system is represented. "Kestrel Freight Cloud" is a coined name.
 
 ## The engagement
 

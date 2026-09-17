@@ -1,6 +1,6 @@
 # Cloud Architecture — Kestrel Freight Cloud
 
-> Fictional, vendor-neutral, synthetic (WORKSHOP_SPEC.md §7.2). All hostnames use
+> Fictional, vendor-neutral, synthetic. All hostnames use
 > `.example`; all addresses use RFC 5737 / RFC 3849 documentation ranges.
 
 This is the component-level view behind [`overview.md`](./overview.md). It names

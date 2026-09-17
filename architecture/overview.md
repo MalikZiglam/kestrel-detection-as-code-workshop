@@ -1,6 +1,6 @@
 # Architecture Overview — Kestrel Freight Cloud
 
-> Fictional, vendor-neutral, synthetic (WORKSHOP_SPEC.md §7.2). No AWS/Azure/GCP
+> Fictional, vendor-neutral, synthetic. No AWS/Azure/GCP
 > terms are required to understand it. Documentation-safe identifiers only.
 
 KFC runs on a vendor-neutral fictional cloud. The environment is split into three

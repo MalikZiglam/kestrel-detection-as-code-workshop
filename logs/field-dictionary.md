@@ -1,6 +1,6 @@
 # Canonical Workshop Field Dictionary
 
-**Authoritative for static field-reference validation** (WORKSHOP_SPEC.md §9, §14).
+**Authoritative for static field-reference validation.**
 CI validates every field a participant references in `detection.yaml` against this
 dictionary. The machine-readable twin is [`field-dictionary.yaml`](./field-dictionary.yaml);
 if the two ever disagree, the `.yaml` wins and this file is corrected.
@@ -18,7 +18,7 @@ hostnames (RFC 6761), RFC 5737 IPv4 ranges (`192.0.2.0/24`, `198.51.100.0/24`,
 ## Allowed `log_source` enum
 
 A detection's schema `log_source:` field **must be exactly one** of these family
-identifiers. This is the single source of truth for the §14 schema `log_source`
+identifiers. This is the single source of truth for the schema `log_source`
 value and matches the CI validator.
 
 | `log_source` | Family | Notes |
@@ -30,7 +30,7 @@ value and matches the CI validator.
 | `admin` | administrative activity | admin sessions, config changes, plane crossings |
 | `endpoint` | endpoint / process (optional) | present but sparse; not on every host |
 
-**Family → index mapping is facilitator-controlled (S5).** Participants never name
+**Family → index mapping is facilitator-controlled.** Participants never name
 an index. The replay script resolves family → index and ignores any target field
 in a participant fixture. Currently mapped to deployable indices:
 
@@ -46,7 +46,7 @@ They are not wired to a deployable index in this build.
 
 ---
 
-## Deliberate address-representation quirk (§9)
+## Deliberate address-representation quirk
 
 Two families encode the same "who connected from where" concept with **different
 field names**. This is realistic messiness, and it is fair because it is documented.
@@ -61,14 +61,14 @@ A query cannot assume one field name across families. Use the field name of the
 
 ---
 
-## Deliberate telemetry gap — candidate #7 (§24)
+## Deliberate telemetry gap — candidate #7
 
 **Secrets-management audit events are `not available` in any family.** No field
 carries the secrets-audit **actor**, **operation**, or **target secret**. This is
 the intended non-detectable candidate. The correct engineering outcome is a
 **telemetry-onboarding requirement** (`status: not_detectable`), not an invented
-detection. CI and AI review must reward the gap finding and never reward invented
-secrets-audit fields.
+detection. CI rejects invented secrets-audit fields at L2; the correct move is to
+document the gap, which review credits.
 
 ---
 
@@ -173,8 +173,9 @@ single-document predicates.
 
 ## Candidate-class support map
 
-Which families/fields each candidate class (§10) draws on. (Candidate problems
-are authored by a downstream agent; this maps only the telemetry they rely on.)
+Which families and fields each candidate class draws on. This maps only the
+telemetry each class relies on; it does not say which events are benign or
+malicious.
 
 | # | Candidate class | Primary family | Key fields |
 |---|---|---|---|
