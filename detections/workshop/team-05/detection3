@@ -1,0 +1,84 @@
+id: privileged-password-authentication
+
+title: Privileged account password authentication
+
+status: production
+
+owner: team-05
+
+deployment:
+  enabled: true
+
+description: >
+  Detects successful password-based authentication to a privileged account.
+
+business_rationale: >
+  Password-based authentication for privileged accounts may warrant
+  additional visibility because stronger methods such as MFA are generally
+  preferred.
+
+evidence_refs:
+  - logs/authentication/README.md
+
+telemetry_requirements:
+  - authentication events with event.action
+  - authentication.method field
+  - authentication.privileged enrichment
+
+tuning_notes:
+  problem: >
+    Legitimate administrator activity may generate alerts.
+  recommended_tuning: >
+    Focus on unusual source IP addresses or enrich with historical activity.
+  rollback: >
+    Disable deployment if alert volume exceeds operational capacity.
+
+severity: medium
+
+log_source: identity
+
+query: >
+  event.category: authentication
+  and event.action: authentication_success
+  and authentication.method: password
+  and authentication.privileged: true
+
+mitre_attack:
+  tactics:
+    - TA0001
+    - TA0006
+  techniques:
+    - T1078
+  subtechniques: []
+
+detection_strategy:
+  ids: []
+
+data_components:
+  ids:
+    - user-account-authentication
+
+false_positives:
+  - Normal administrator sign-in activity.
+  - Approved operational maintenance.
+
+known_exceptions: []
+
+investigation_guidance: >
+  Validate the source IP, user identity, authentication history, and expected
+  administrative activity.
+
+tags:
+  - identity
+  - authentication
+  - privileged
+  - password
+
+test_cases:
+  positive:
+    - tests/workshop/team-05/positive.ndjson
+  negative:
+    - tests/workshop/team-05/negative.ndjson
+
+review_date: 2026-12-01
+``
