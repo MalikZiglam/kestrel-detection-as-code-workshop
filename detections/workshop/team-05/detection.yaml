@@ -1,84 +1,45 @@
-# =============================================================================
-# TEAM 05 — DETECTION WORKSPACE
-# =============================================================================
-# Work directly in this file.
-#
-# Start in draft mode while you investigate and design.
-#
-# Before your Pull Request is ready:
-#   1. Replace the title and description with your selected use case.
-#   2. Update severity.
-#   3. Set log_source to the telemetry family you are using.
-#   4. Replace the example query with your detection logic.
-#   5. Add the evidence files that support your detection.
-#   6. Create:
-#        tests/workshop/team-05/positive.ndjson
-#        tests/workshop/team-05/negative.ndjson
-#   7. When ready for validation/deployment, change:
-#        status: test
-#        deployment.enabled: true
-#
-# Use only fields documented in logs/field-dictionary.md.
-# Do not specify indices, endpoints, credentials, or Elastic targets.
-# =============================================================================
-
-id: team05-draft-detection
-
-title: Team 05 detection — replace with selected use case
-
-status: draft
-
-owner: team-05
-
-deployment:
-  enabled: false
-
+title: Account Added and Removed from Privileged Groups
+id: 7efc75ce-e2a4-400f-a8b1-283d3b0f2c60
+status: experimental
 description: >
-  Replace this text with a precise description of the behavior this detection
-  is intended to identify.
+  Detects accounts that are added to a privileged group and subsequently
+  removed from the same privileged group within a short period of time.
+  This may indicate privilege abuse, attacker testing, or privilege
+  escalation attempts.
 
-business_rationale: >
-  Replace this text with the business or security impact of detecting this
-  behavior.
+references:
+  - https://github.com/Azure/Azure-Sentinel/blob/master/Detections/SecurityEvent/UserAccountAdd-Removed.yaml
 
-evidence_refs: []
-
-telemetry_requirements: []
-
-severity: medium
-
-log_source: identity
-
-query: >
-  event.category: authentication
-  and event.action: authentication_success
-
-mitre_attack:
-  tactics: []
-  techniques: []
-  subtechniques: []
-
-detection_strategy:
-  ids: []
-
-data_components:
-  ids: []
-
-false_positives: []
-
-known_exceptions: []
-
-investigation_guidance: >
-  Describe what an analyst should inspect after this rule generates an alert.
+author: Microsoft Security Research
+date: 2024-01-01
+modified: 2026-09-17
 
 tags:
-  - workshop
-  - team-05
+  - attack.persistence
+  - attack.privilege-escalation
+  - attack.t1098
+  - attack.t1078
 
-test_cases:
-  positive:
-    - tests/workshop/team-05/positive.ndjson
-  negative:
-    - tests/workshop/team-05/negative.ndjson
+logsource:
+  product: windows
+  service: security
 
-review_date: "2026-12-31"
+detection:
+  add_to_privileged_group:
+    EventID:
+      - 4728   # Member added to global security-enabled group
+      - 4732   # Member added to local security-enabled group
+      - 4756   # Member added to universal security-enabled group
+
+  remove_from_privileged_group:
+    EventID:
+      - 4729   # Member removed from global security-enabled group
+      - 4733   # Member removed from local security-enabled group
+      - 4757   # Member removed from universal security-enabled group
+
+falsepositives:
+  - Administrative maintenance
+  - Automated provisioning/deprovisioning workflows
+  - Privileged Access Management solutions
+
+level: low
