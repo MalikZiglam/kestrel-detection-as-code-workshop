@@ -10,46 +10,42 @@ deployment:
   enabled: true
 
 description: >
-  Detects successful authentication of a privileged account after
-  multiple failed authentication attempts from the same source within
-  the enrichment window.
+  Detects successful authentication of a privileged account.
 
 business_rationale: >
-  A successful login after repeated failures may indicate password
-  guessing, credential stuffing, or brute force activity that
-  ultimately succeeded against a privileged account.
+  Privileged account access represents a higher risk than standard user
+  authentication and should be monitored to identify potentially
+  suspicious activity.
 
 evidence_refs:
   - logs/authentication/README.md
 
 telemetry_requirements:
-  - authentication events containing event.action
+  - authentication events with event.action
   - authentication.privileged enrichment
-  - workshop.enrichment.failed_logins_same_source_5m enrichment
 
 tuning_notes:
   problem: >
-    Low thresholds can generate noise during normal user behaviour.
+    Monitoring all privileged logins can generate analyst workload.
   recommended_tuning: >
-    Keep the threshold at 5 or greater and focus on privileged accounts.
+    Consider adding enrichment-based thresholds or source IP filtering if
+    supported by the query language.
   rollback: >
-    Disable deployment.enabled if false positives become excessive.
+    Set deployment.enabled to false if excessive alert volume is observed.
 
-severity: high
+severity: medium
 
 log_source: identity
 
 query: >
-  event.category:authentication
-  and event.action:authentication_success
-  and authentication.privileged:true
-  and workshop.enrichment.failed_logins_same_source_5m:>=5
+  event.category: authentication
+  and event.action: authentication_success
+  and authentication.privileged: true
 
 mitre_attack:
   tactics:
     - TA0006
   techniques:
-    - T1110
     - T1078
   subtechniques: []
 
@@ -61,28 +57,24 @@ data_components:
     - user-account-authentication
 
 false_positives:
-  - User repeatedly mistypes password before successful login.
-  - Administrator using outdated stored credentials before correction.
+  - Legitimate administrator logins.
+  - Scheduled privileged operational activities.
 
 known_exceptions: []
 
 investigation_guidance: >
-  Review source.ip, user.name, prior authentication failures,
-  geolocation, and recent privileged activity. Confirm whether the
-  login originated from a trusted device and expected location.
+  Review source.ip, authentication.method, user.name, and recent login
+  history to determine whether the activity is expected.
 
 tags:
   - identity
   - authentication
   - privileged
-  - brute-force
-  - credential-access
 
 test_cases:
   positive:
-    - tests/team-05/positive/admin_success_after_failures.ndjson
+    - tests/workshop/team-05/positive.ndjson
   negative:
-    - tests/team-05/negative/admin_normal_login.ndjson
-    - tests/team-05/negative/non_privileged_success.ndjson
+    - tests/workshop/team-05/negative.ndjson
 
 review_date: 2026-12-01
