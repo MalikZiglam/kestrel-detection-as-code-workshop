@@ -36,7 +36,7 @@ Every required field is defined by the validator's `REQUIRED_KEYS`: `id`, `title
 | Level | What it checks | Where it runs |
 |---|---|---|
 | **L1 structural** | Valid YAML, required keys, id format + uniqueness, allowed status/severity, positive + negative fixtures referenced. | CI, on your PR |
-| **L2 semantic** | `log_source` is a real family; every field in your query exists **and** belongs to that family; numeric operators used only on numeric fields; ATT&CK ids exist in the pinned subset. | CI, on your PR |
+| **L2 semantic** | Bounded syntax and semantic validation for the workshop-supported query subset: query syntax is well-formed (balanced parens, closed quotes, at least one field predicate, separate predicates joined by `and`/`or`, no leading/dangling `and`/`or`, no bare or trailing `not`; a leading `not` before a predicate **is** allowed); `log_source` is a real family; every field in your query exists **and** belongs to that family; numeric operators used only on numeric fields; ATT&CK ids exist in the pinned subset. Anything outside the subset **fails as unsupported** — it is never silently accepted. It does **not** prove that arbitrary Elastic KQL is valid — only the workshop subset. | CI, on your PR |
 | **L3 runtime** | Replays events into the SIEM and confirms the rule actually fires. | **Facilitator, post-merge** |
 
 **L1 pass ≠ L2 pass ≠ runtime pass.** Green CI proves shape and real fields — not
@@ -44,8 +44,11 @@ that the rule detects anything. That is what L3 is for.
 
 ## KQL — exactly what this workshop supports
 
-The CI validator uses a deliberately small parser. Use only this grammar; anything
-fancier is either ignored or fails.
+The CI validator uses a deliberately small, bounded parser for the workshop query
+subset. It is **not** a full Elastic KQL engine and does not prove your query is
+valid Elastic KQL — it checks that the subset below is well-formed. Use only this
+grammar; anything outside it **fails as unsupported by the workshop KQL subset** —
+it is not silently ignored.
 
 **Field–value conditions** — `field:value`, or `field <op> value` where `<op>` is
 one of `:` `>=` `<=` `>` `<` `=`:
@@ -72,6 +75,13 @@ cloud.api_operation: ("SetBucketPolicy" or "PutBucketAcl")
 
 ### Rules the validator enforces
 
+- **Query syntax must be well-formed for the subset** — balanced parentheses,
+  closed quotes, at least one field predicate, separate predicates joined by
+  `and`/`or`, no leading or dangling `and`/`or`, and no `field:` with a missing
+  value. A leading `not` before a predicate is allowed; a bare or trailing `not`
+  is not. Anything outside the subset fails L2 as "unsupported by workshop KQL
+  subset" (a subset check, not a full-Elastic guarantee) — it is never silently
+  ignored.
 - **Every field must be in the [field dictionary](../logs/field-dictionary.md)**
   and belong to your declared `log_source` family. Unknown field = fail (this is
   how a telemetry gap surfaces).

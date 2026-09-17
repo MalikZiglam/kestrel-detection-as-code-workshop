@@ -127,8 +127,8 @@ single-document predicates.
 | `network.direction` | keyword | `inbound` \| `outbound` \| `internal`. | Optional |
 | `network.bytes` | integer | Bytes for a single flow event. | Optional |
 | `network.bytes_out_10m` | integer | **Enrichment.** Outbound bytes/source over 10 min on `flow_summary`. Serves #6. | Optional (enrichment) |
-| `source.plane` | keyword | Originating trust plane (`corporate`\|`workload`\|`management`). | Optional |
-| `destination.plane` | keyword | Target trust plane. | Optional |
+| `source.plane` | keyword | Originating trust plane (`edge`\|`corporate`\|`workload`\|`management`). Internet-facing traffic (carriers, external clients) enters via `edge`. | Optional |
+| `destination.plane` | keyword | Target trust plane (`edge`\|`corporate`\|`workload`\|`management`). | Optional |
 
 ### `cloud` — cloud control-plane API
 

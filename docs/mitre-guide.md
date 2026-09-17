@@ -16,6 +16,12 @@ baseline example rules.
   subset was cut from.
 - The subset is deliberately narrow (~30 ids). It is not the whole framework.
 - Offline and deterministic: the validator reads the file, never the network.
+- **The pinned version is intentional, not a currency claim.** `attack_version`
+  (e.g. `v16.1`) names the release this subset was authored from so the check is
+  reproducible; it is **not** asserted to be the newest ATT&CK release at workshop
+  time. Whether to adopt a newer ATT&CK version is a separate, deliberate
+  facilitator decision — the validator only checks id *existence* against whatever
+  version is pinned here.
 
 ## Deterministic check vs human/AI judgment (the boundary)
 

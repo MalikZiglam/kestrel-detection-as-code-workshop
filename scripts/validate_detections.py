@@ -48,6 +48,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime
 
 try:
     import yaml
@@ -164,10 +165,18 @@ def load_field_dictionary(path: str) -> dict:
     families = set(doc.get("log_source_enum", []))
     field_families: dict[str, set[str]] = {}
     field_types: dict[str, str] = {}
+    # guaranteed_by_family[family] = set of field names the dictionary marks
+    # guaranteed:true for that family. Derived from the trusted dictionary so the
+    # fixture check never hardcodes a second copy of the list.
+    guaranteed_by_family: dict[str, set[str]] = {fam: set() for fam in families}
     for entry in doc.get("fields", []):
         name = entry["name"]
-        field_families[name] = set(entry.get("families", []))
+        fams = set(entry.get("families", []))
+        field_families[name] = fams
         field_types[name] = entry.get("type", "")
+        if entry.get("guaranteed") is True:
+            for fam in fams:
+                guaranteed_by_family.setdefault(fam, set()).add(name)
     # Families that map to a deployable index are the SINGLE trusted source in
     # family_index_mapping.mapped (facilitator-controlled). A deployable rule on
     # a family NOT listed here has nowhere to deploy (L2 failure below). Derive
@@ -179,6 +188,7 @@ def load_field_dictionary(path: str) -> dict:
         "field_families": field_families,
         "field_types": field_types,
         "mapped_families": mapped_families,
+        "guaranteed_by_family": guaranteed_by_family,
     }
 
 
@@ -219,10 +229,299 @@ def extract_query_fields(query: str) -> list[tuple[str, str]]:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# Bounded KQL syntax sanity (workshop subset only — NOT a full Elastic parser)
+# --------------------------------------------------------------------------- #
+_KQL_TOKEN_RE = re.compile(
+    r"""\s*(
+        \(                    |
+        \)                    |
+        "(?:[^"\\]|\\.)*"      |   # double-quoted string
+        '(?:[^'\\]|\\.)*'      |   # single-quoted string
+        [^\s()]+                   # bareword: field, value, field:value, operator
+    )""",
+    re.VERBOSE,
+)
+_KQL_BINARY = {"and", "or"}
+_KQL_UNARY = {"not"}
+
+
+def _kql_tokenize(q: str) -> list[str]:
+    toks: list[str] = []
+    i = 0
+    while i < len(q):
+        m = _KQL_TOKEN_RE.match(q, i)
+        if not m or m.end() == i:
+            break
+        toks.append(m.group(1))
+        i = m.end()
+    return toks
+
+
+# operators that may appear as `field <op> value`
+_KQL_FIELD_OPS = (":", ">=", "<=", ">", "<", "=")
+
+# A syntactically valid field name for the workshop subset: a dotted identifier
+# (letters/digits/underscore per segment), optionally prefixed with `@` for
+# `@timestamp`. Deliberately narrow — it matches the field-dictionary shape and
+# nothing else. It is NOT a general KQL field grammar.
+_KQL_FIELD_NAME_RE = re.compile(r"@?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
+
+
+def _kql_is_field_name(tok: str) -> bool:
+    return bool(_KQL_FIELD_NAME_RE.match(tok))
+
+
+def _kql_split_embedded(tok: str) -> tuple[str, str, str] | None:
+    """Split a single bareword token into (field, op, value) IFF it is a
+    well-formed embedded predicate: a valid field name, exactly one supported
+    operator, a non-empty value, and the value does not itself begin with a
+    field operator. Returns None if the token is not a clean embedded predicate
+    (e.g. `:foo`, `event.category::authentication`, `event.category==network`)."""
+    # Longest operators first so `>=`/`<=` win over `>`/`<`/`=`.
+    for op in (">=", "<=", ":", ">", "<", "="):
+        idx = tok.find(op)
+        if idx <= 0:
+            continue  # op absent, or at position 0 -> empty field name
+        field = tok[:idx]
+        value = tok[idx + len(op) :]
+        if not _kql_is_field_name(field):
+            return None
+        if value == "":
+            return None  # colon/spaced-op head handled elsewhere
+        # value must not start with another field operator (rejects `::x`, `==x`,
+        # `:>=x`, and any doubled/leading operator in the value position)
+        if any(value.startswith(o) for o in _KQL_FIELD_OPS):
+            return None
+        return field, op, value
+    return None
+
+
+def _kql_is_value(tok: str) -> bool:
+    """A standalone value token: a quoted string, a number, true/false, or a
+    bareword that is NOT a reserved keyword and does NOT itself introduce a field
+    predicate (no trailing/embedded field operator)."""
+    if tok in ("(", ")"):
+        return False
+    tl = tok.lower()
+    if tl in _KQL_BINARY or tl in _KQL_UNARY:
+        return False
+    if tl in ("true", "false"):
+        return True
+    if (tok.startswith('"') and tok.endswith('"')) or (tok.startswith("'") and tok.endswith("'")):
+        return True
+    # a token that carries a field operator (`field:`, `a>=b`) is a predicate head,
+    # not a bare value
+    for op in _KQL_FIELD_OPS:
+        if op in tok:
+            return False
+    return True
+
+
+def kql_syntax_errors(query: str) -> list[str]:
+    """Bounded, deterministic grammar check for the workshop-supported KQL subset.
+
+    This is NOT a full Elastic KQL parser and does not claim to be. It validates the
+    small grammar the workshop teaches and REJECTS anything outside it as unsupported
+    — it never silently ignores unsupported syntax. The grammar:
+
+        expr      := term ( (and|or) term )*
+        term      := not* atom
+        atom      := '(' expr ')'  |  predicate
+        predicate := field <op> value            (op in : >= <= > < =)
+                   | field ':' '(' value (or value)* ')'   (value list)
+
+    A valid query contains at least one predicate; separate predicates must be
+    joined by and/or; empty parenthesized groups fail; a binary operator cannot
+    appear where an operand is expected; `not` must be followed by an atom; trailing
+    operators fail. A query that passes is only plausible for the subset, not proven
+    valid for arbitrary Elastic.
+    """
+    q = query.strip()
+    if not q:
+        return ["empty query"]
+    errs: list[str] = []
+    # unclosed quote: odd count of unescaped quotes of either kind
+    for ch in ('"', "'"):
+        if q.replace("\\" + ch, "").count(ch) % 2 != 0:
+            errs.append(f"unclosed {ch} quote")
+    if errs:
+        return errs
+
+    toks = _kql_tokenize(q)
+    pos = 0
+    n = len(toks)
+    predicate_count = 0
+
+    def peek() -> str | None:
+        return toks[pos] if pos < n else None
+
+    def parse_value_list() -> bool:
+        # assumes current token is '('; consumes a ( value (or value)* ) group
+        nonlocal pos
+        pos += 1  # consume '('
+        if peek() == ")":
+            errs.append("empty parenthesized value list")
+            return False
+        if not (peek() is not None and _kql_is_value(peek())):
+            errs.append("value list must contain values")
+            return False
+        pos += 1  # first value
+        while peek() is not None and peek().lower() == "or":
+            pos += 1  # consume 'or'
+            if not (peek() is not None and _kql_is_value(peek())):
+                errs.append("value list operator must be followed by a value")
+                return False
+            pos += 1  # value
+        if peek() != ")":
+            errs.append("unterminated value list")
+            return False
+        pos += 1  # consume ')'
+        return True
+
+    def parse_predicate() -> bool:
+        # A predicate takes one of three token shapes:
+        #   (a) embedded op:   `field:value`, `a>=b`      (one token, op inside)
+        #   (b) colon head:    `field:` value | `field:` ( value-list )
+        #   (c) spaced op:     `field`  `>=`  value        (three tokens)
+        nonlocal pos, predicate_count
+        head = peek()
+        if head is None:
+            return False
+        # (a) embedded-op predicate: `field:value`, `a>=b` — one token with the
+        # operator inside. Accept ONLY when it splits cleanly into a valid field
+        # name, exactly one supported operator, and a non-empty value that does
+        # not itself begin with an operator. Malformed tokens like `:foo`,
+        # `event.category::authentication`, or `event.category==network` do NOT
+        # split cleanly and are rejected below.
+        has_op = any(op in head for op in _KQL_FIELD_OPS)
+        ends_op = next((op for op in _KQL_FIELD_OPS if head.endswith(op)), None)
+        if has_op and ends_op is None:
+            if _kql_split_embedded(head) is not None:
+                pos += 1
+                predicate_count += 1
+                return True
+            errs.append(f"malformed field predicate {head!r}")
+            pos += 1
+            return False
+        # (b) colon head like `field:` -> needs a value or a value list next. The
+        # head must be a valid field name immediately followed by exactly one
+        # supported operator, so a bare operator token (`>=`, `:`) or a malformed
+        # head (`event.category::`) is NOT a field head.
+        if ends_op is not None and len(head) > len(ends_op):
+            field_part = head[: -len(ends_op)]
+            if not _kql_is_field_name(field_part):
+                errs.append(f"malformed field predicate {head!r}")
+                pos += 1
+                return False
+            pos += 1  # consume field head
+            nxt = peek()
+            if nxt == "(":
+                if not parse_value_list():
+                    return False
+                predicate_count += 1
+                return True
+            if nxt is not None and _kql_is_value(nxt):
+                pos += 1
+                predicate_count += 1
+                return True
+            errs.append(f"field {head!r} has no value")
+            return False
+        # (c) spaced-operator predicate: a field bareword, then a standalone op token,
+        # then a value (e.g. `network.bytes_out_10m >= 5`).
+        if _kql_is_value(head):
+            nxt = toks[pos + 1] if pos + 1 < n else None
+            if nxt in _KQL_FIELD_OPS:
+                pos += 2  # consume field + operator
+                val = peek()
+                if val is not None and _kql_is_value(val):
+                    pos += 1
+                    predicate_count += 1
+                    return True
+                errs.append(f"field {head!r} operator {nxt!r} has no value")
+                return False
+        # anything else is not a predicate the subset supports
+        errs.append(f"unsupported token {head!r} where a field predicate was expected")
+        pos += 1
+        return False
+
+    def parse_atom() -> bool:
+        nonlocal pos
+        # leading unary NOT(s)
+        while peek() is not None and peek().lower() in _KQL_UNARY:
+            pos += 1
+            if peek() is None:
+                errs.append("dangling operator")
+                return False
+            if peek().lower() in _KQL_BINARY:
+                errs.append("invalid operator sequence")
+                return False
+        tok = peek()
+        if tok is None:
+            errs.append("expected an expression")
+            return False
+        if tok == "(":
+            pos += 1  # consume '('
+            if peek() == ")":
+                errs.append("empty parenthesized group")
+                pos += 1
+                return False
+            if not parse_expr():
+                return False
+            if peek() != ")":
+                errs.append("unbalanced parentheses")
+                return False
+            pos += 1  # consume ')'
+            return True
+        if tok == ")":
+            errs.append("unbalanced parentheses")
+            return False
+        if tok.lower() in _KQL_BINARY:
+            errs.append("invalid operator sequence")
+            return False
+        return parse_predicate()
+
+    def parse_expr() -> bool:
+        nonlocal pos
+        if not parse_atom():
+            return False
+        while True:
+            nxt = peek()
+            if nxt is None or nxt == ")":
+                return True
+            if nxt.lower() in _KQL_BINARY:
+                pos += 1  # consume and/or
+                if peek() is None:
+                    errs.append("dangling operator")
+                    return False
+                if not parse_atom():
+                    return False
+            else:
+                # two atoms with no binary operator between them
+                errs.append("adjacent predicates must be joined by and/or")
+                return False
+
+    ok = parse_expr()
+    if ok and pos != n:
+        errs.append("unexpected trailing tokens")
+    if not errs and predicate_count == 0:
+        errs.append("query has no field predicate")
+    # de-duplicate while preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for e in errs:
+        if e not in seen:
+            seen.add(e)
+            out.append(e)
+    return out
+
+
 def is_deployable(rule: dict) -> bool:
     status = rule.get("status")
-    enabled = (rule.get("deployment") or {}).get("enabled") is True
-    return status in DEPLOYABLE_STATUSES and enabled
+    dep = rule.get("deployment")
+    enabled = isinstance(dep, dict) and dep.get("enabled") is True
+    # status may be an unhashable participant type (list/dict); guard the set test.
+    return isinstance(status, str) and status in DEPLOYABLE_STATUSES and enabled
 
 
 def _check_fixture_list(value: object, case: str, l1: LevelResult) -> None:
@@ -260,21 +559,36 @@ def _expected_fixture_prefix(detection_path: str, data_root: str) -> str | None:
     return None
 
 
-def validate_fixture_refs(rule: dict, detection_path: str, data_root: str, l1: LevelResult) -> None:
+def validate_fixture_refs(
+    rule: dict, detection_path: str, data_root: str, l1: LevelResult, fd: dict
+) -> None:
     """Validate that a DEPLOYABLE rule's fixture references resolve to real,
     correctly-shaped ndjson files INSIDE the data root's expected subtree.
 
     Structural only (L1): the file must exist, be a regular file, end in
-    .ndjson, sit under the rule's owning fixture subtree, hold >=1 non-empty
-    line, and every non-empty line must parse as a JSON OBJECT. This never
-    executes a fixture and never evaluates KQL — it proves the reference is a
-    usable ndjson event file, nothing about whether the rule fires (that is L3).
+    .ndjson, sit under the rule's owning fixture subtree, hold EXACTLY one event
+    line that parses as a JSON OBJECT, and the positive and negative fixtures must
+    resolve to DIFFERENT files. This never executes a fixture and never evaluates
+    KQL — it proves the reference is a usable ndjson event file, nothing about
+    whether the rule fires (that is L3).
     """
     tc = rule.get("test_cases")
     if not isinstance(tc, dict):
         return  # shape already failed above
+    # The rule's family scopes which fixture fields are valid. A non-string family
+    # already failed L2; here we simply skip family-scoped field checks for it.
+    family = rule.get("log_source")
+    if not isinstance(family, str):
+        family = None
     prefix = _expected_fixture_prefix(detection_path, data_root)
-    root_abs = os.path.abspath(data_root)
+    # Resolve the data root through any symlinks ONCE; every fixture's resolved
+    # real path must stay inside this. realpath (not abspath) is what defeats a
+    # symlink that points outside the tree.
+    root_real = os.path.realpath(data_root)
+    prefix_real = os.path.realpath(os.path.join(data_root, prefix)) if prefix else None
+    # Track the resolved real path of every accepted reference per case, so we can
+    # reject (a) the same file referenced twice and (b) positive == negative.
+    resolved: dict[str, list[str]] = {"positive": [], "negative": []}
     for case in ("positive", "negative"):
         refs = tc.get(case)
         if not isinstance(refs, list):
@@ -286,25 +600,70 @@ def validate_fixture_refs(rule: dict, detection_path: str, data_root: str, l1: L
             if not ref.endswith(".ndjson"):
                 l1.fail(f"{case} fixture {ref!r} must be a .ndjson file")
                 continue
-            if prefix is not None and not ref.startswith(prefix):
-                l1.fail(f"{case} fixture {ref!r} must live under {prefix}")
+            # Reject an absolute reference outright — a fixture path is always
+            # repo-relative; an absolute path is an escape attempt.
+            if os.path.isabs(ref):
+                l1.fail(f"{case} fixture {ref!r} must be a repo-relative path, not absolute")
                 continue
-            abs_ref = os.path.abspath(os.path.join(data_root, ref))
-            # containment: never escape the data root (no ../ traversal)
-            if os.path.commonpath([root_abs, abs_ref]) != root_abs:
+            # Reject any parent-traversal segment before resolving. This catches
+            # tests/workshop/team-01/../team-02/x.ndjson, whose raw string starts
+            # with the owning prefix but climbs out of it.
+            if ".." in ref.replace("\\", "/").split("/"):
+                l1.fail(f"{case} fixture {ref!r} must not contain a '..' path segment")
+                continue
+            # Resolve through symlinks, then enforce containment + ownership on the
+            # REAL path (a symlink whose target escapes is caught here).
+            real_ref = os.path.realpath(os.path.join(data_root, ref))
+            if os.path.commonpath([root_real, real_ref]) != root_real:
                 l1.fail(f"{case} fixture {ref!r} resolves outside the repository")
                 continue
-            if not os.path.exists(abs_ref):
+            if prefix_real is not None and (
+                os.path.commonpath([prefix_real, real_ref]) != prefix_real
+            ):
+                l1.fail(f"{case} fixture {ref!r} must live under {prefix}")
+                continue
+            if not os.path.exists(real_ref):
                 l1.fail(f"{case} fixture {ref!r} does not exist")
                 continue
-            if not os.path.isfile(abs_ref):
+            if not os.path.isfile(real_ref):
                 l1.fail(f"{case} fixture {ref!r} is not a regular file")
                 continue
-            _check_fixture_content(abs_ref, ref, case, l1)
+            # Duplicate reference within EITHER case list, resolving to the same
+            # file (e.g. two entries, or one via a symlink) — reject.
+            if real_ref in resolved["positive"] or real_ref in resolved["negative"]:
+                l1.fail(f"{case} fixture {ref!r} resolves to an already-referenced fixture file")
+                continue
+            resolved[case].append(real_ref)
+            _check_fixture_content(real_ref, ref, case, l1, fd, family)
 
 
-def _check_fixture_content(abs_ref: str, ref: str, case: str, l1: LevelResult) -> None:
-    """>=1 non-empty line, each non-empty line a JSON object. No execution."""
+def _is_tz_aware_iso8601(value: object) -> bool:
+    """True iff value is a string parseable as a timezone-aware ISO-8601/RFC3339
+    timestamp. A trailing 'Z' (RFC3339 UTC) is accepted; a naive timestamp with no
+    offset is rejected — every event must be unambiguous in time."""
+    if not isinstance(value, str) or not value.strip():
+        return False
+    text = value.strip()
+    # datetime.fromisoformat accepts an offset; normalize a trailing Z to +00:00.
+    if text.endswith("Z") or text.endswith("z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return False
+    return dt.tzinfo is not None
+
+
+def _check_fixture_content(
+    abs_ref: str, ref: str, case: str, l1: LevelResult, fd: dict, family: str | None
+) -> None:
+    """The single event line must be a non-empty JSON OBJECT that carries a
+    non-empty string ``event.id`` and a timezone-aware ISO-8601 ``@timestamp``,
+    and every field it references must exist in the trusted field dictionary and
+    be valid for the rule's family. No execution and no schema invention beyond
+    what the field dictionary already defines. Exactly-one-event is enforced by
+    the caller's line count; here we validate the event's content."""
+    field_families = fd.get("field_families", {})
     try:
         with open(abs_ref, encoding="utf-8") as fh:
             nonempty = 0
@@ -320,8 +679,59 @@ def _check_fixture_content(abs_ref: str, ref: str, case: str, l1: LevelResult) -
                     continue
                 if not isinstance(obj, dict):
                     l1.fail(f"{case} fixture {ref!r} line {lineno} is not a JSON object")
+                    continue
+                if not obj:
+                    l1.fail(f"{case} fixture {ref!r} line {lineno} is an empty object {{}}")
+                    continue
+                # event.id: present, non-empty string
+                eid = obj.get("event.id")
+                if "event.id" not in obj or not isinstance(eid, str) or not eid.strip():
+                    l1.fail(
+                        f"{case} fixture {ref!r} line {lineno} must carry a non-empty "
+                        "string event.id"
+                    )
+                # @timestamp: present, timezone-aware ISO-8601
+                if "@timestamp" not in obj:
+                    l1.fail(f"{case} fixture {ref!r} line {lineno} is missing @timestamp")
+                elif not _is_tz_aware_iso8601(obj.get("@timestamp")):
+                    l1.fail(
+                        f"{case} fixture {ref!r} line {lineno} @timestamp "
+                        f"{obj.get('@timestamp')!r} is not a timezone-aware ISO-8601 timestamp"
+                    )
+                # every referenced field must exist in the dictionary and be valid
+                # for the family. Fields with an empty family set are envelope fields
+                # (e.g. @timestamp, event.id) valid everywhere.
+                for key in obj:
+                    if key not in field_families:
+                        l1.fail(
+                            f"{case} fixture {ref!r} line {lineno} field {key!r} is not in "
+                            "the field dictionary (telemetry gap or typo)"
+                        )
+                        continue
+                    fams = field_families[key]
+                    if family is not None and fams and family not in fams:
+                        l1.fail(
+                            f"{case} fixture {ref!r} line {lineno} field {key!r} is not "
+                            f"available in family {family!r} (belongs to {sorted(fams)})"
+                        )
+                # every field the trusted dictionary marks guaranteed:true for this
+                # family must be present. The set is derived from the dictionary, not
+                # hardcoded, so it tracks whatever the dictionary declares.
+                if family is not None:
+                    required = fd.get("guaranteed_by_family", {}).get(family, set())
+                    missing = sorted(required - set(obj.keys()))
+                    if missing:
+                        l1.fail(
+                            f"{case} fixture {ref!r} line {lineno} is missing "
+                            f"guaranteed {family} field(s): {missing}"
+                        )
         if nonempty == 0:
             l1.fail(f"{case} fixture {ref!r} has no event lines")
+        elif nonempty > 1:
+            l1.fail(
+                f"{case} fixture {ref!r} has {nonempty} events; use exactly one "
+                "(one positive event, one negative event)"
+            )
     except OSError as exc:
         l1.fail(f"{case} fixture {ref!r} cannot be read: {exc}")
 
@@ -351,6 +761,15 @@ def validate_l1(path: str, raw: str, seen_ids: dict[str, str], res: FileResult) 
     for key in REQUIRED_KEYS:
         if key not in rule:
             l1.fail(f"missing required key: {key}")
+
+    # title / owner: when present, must be non-empty strings. A null/int/list here
+    # is a malformed rule, not a crash — fail it cleanly rather than letting a
+    # hostile type flow downstream.
+    for key in ("title", "owner"):
+        if key in rule:
+            val = rule.get(key)
+            if not isinstance(val, str) or not val.strip():
+                l1.fail(f"{key} must be a non-empty string, got {type(val).__name__}")
     dep = rule.get("deployment")
     if not isinstance(dep, dict) or "enabled" not in (dep or {}):
         l1.fail("deployment.enabled missing")
@@ -366,16 +785,23 @@ def validate_l1(path: str, raw: str, seen_ids: dict[str, str], res: FileResult) 
     if not isinstance(tc, dict) or "positive" not in tc or "negative" not in tc:
         l1.fail("test_cases must define positive and negative")
 
-    # status
+    # status — must be a string before any set-membership test (participant YAML
+    # may supply a list/dict, which would raise TypeError against a set).
     status = rule.get("status")
-    if status not in ALLOWED_STATUSES:
+    if not isinstance(status, str):
+        if "status" in rule:
+            l1.fail(f"status must be a string, got {type(status).__name__}")
+    elif status not in ALLOWED_STATUSES:
         l1.fail(f"status {status!r} not in {sorted(ALLOWED_STATUSES)}")
 
     deployable = is_deployable(rule) if isinstance(rule.get("deployment"), dict) else False
 
-    # severity: real value required for deployable; non-deployable may be a placeholder
+    # severity: real value required for deployable; non-deployable may be a
+    # placeholder. Guard the type first (list/dict are unhashable against a set).
     sev = rule.get("severity")
-    if deployable:
+    if sev is not None and not isinstance(sev, str):
+        l1.fail(f"severity must be a string, got {type(sev).__name__}")
+    elif deployable:
         if sev not in ALLOWED_SEVERITIES:
             l1.fail(f"severity {sev!r} not in {sorted(ALLOWED_SEVERITIES)} (deployable rule)")
     else:
@@ -430,9 +856,13 @@ def validate_l2(rule: dict, fd: dict, attack: dict, res: FileResult) -> None:
         l2.skip_reason = "no rule"
         return
 
-    # log_source must be a defined family
+    # log_source must be a defined family. Guard the type first: a participant
+    # list/dict is unhashable and would raise TypeError against the family set.
     family = rule.get("log_source")
-    if family not in fd["families"]:
+    if not isinstance(family, str):
+        l2.fail(f"log_source must be a string, got {type(family).__name__}")
+        family = None  # can't do family-scoped field checks
+    elif family not in fd["families"]:
         l2.fail(f"log_source {family!r} is not a defined family {sorted(fd['families'])}")
         family = None  # can't do family-scoped field checks
 
@@ -456,37 +886,81 @@ def validate_l2(rule: dict, fd: dict, attack: dict, res: FileResult) -> None:
 
     # field-dictionary contract over the query
     query = rule.get("query")
-    query_str = "" if query is None else str(query).strip()
-    if query_str:
-        for field, op in extract_query_fields(query_str):
-            if field not in fd["field_families"]:
-                # unknown field: this is the candidate-#7 secrets-audit gap path
-                l2.fail(f"query field {field!r} not in field dictionary (telemetry gap or typo)")
-                continue
-            if family is not None and family not in fd["field_families"][field]:
-                l2.fail(
-                    f"query field {field!r} not available in family {family!r} "
-                    f"(belongs to {sorted(fd['field_families'][field])})"
-                )
-            # cheap datatype misuse: numeric comparison on a non-numeric field
-            if op in {">=", "<=", ">", "<"}:
-                ftype = fd["field_types"].get(field, "")
-                if ftype not in {"integer", "long", "float", "double", "date"}:
-                    l2.fail(f"field {field!r} type {ftype!r} misused with numeric op {op!r}")
+    # The query must be a real string — never stringify a null/int/list/dict into a
+    # token stream that could pass. A non-string query is malformed for ANY rule.
+    if query is not None and not isinstance(query, str):
+        l2.fail(f"query must be a string, got {type(query).__name__}")
+    else:
+        query_str = "" if query is None else query.strip()
+        if not query_str:
+            # An empty query cannot be syntax-checked. It is a failure for a rule
+            # that is expected to detect something (deployable). A non-deployable
+            # lifecycle draft (e.g. status:draft, enabled:false) may legitimately
+            # carry an empty query, so we do not fail those here — L1 already fails
+            # a deployable rule with an empty query; L2 enforces it independently so
+            # an authored deployable query can never bypass syntax validation.
+            if is_deployable(rule):
+                l2.fail("query is empty — a deployable rule must define a non-empty query")
+        else:
+            # (1) Bounded syntax sanity FIRST. A structurally broken query has no
+            # meaningful fields to check, so on a syntax failure we skip the
+            # field-dictionary pass. This is the workshop KQL subset, not arbitrary
+            # Elastic KQL — passing here does not prove Elastic would accept it.
+            syntax_errs = kql_syntax_errors(query_str)
+            if syntax_errs:
+                for e in syntax_errs:
+                    l2.fail(f"query {e} — unsupported by workshop KQL subset")
+            else:
+                # (2) Semantic field-dictionary contract, only once syntax is sane.
+                for field, op in extract_query_fields(query_str):
+                    if field not in fd["field_families"]:
+                        # unknown field: this is the candidate-#7 secrets-audit gap path
+                        l2.fail(f"query field {field!r} not in field dictionary (telemetry gap or typo)")
+                        continue
+                    if family is not None and family not in fd["field_families"][field]:
+                        l2.fail(
+                            f"query field {field!r} not available in family {family!r} "
+                            f"(belongs to {sorted(fd['field_families'][field])})"
+                        )
+                    # cheap datatype misuse: numeric comparison on a non-numeric field
+                    if op in {">=", "<=", ">", "<"}:
+                        ftype = fd["field_types"].get(field, "")
+                        if ftype not in {"integer", "long", "float", "double", "date"}:
+                            l2.fail(f"field {field!r} type {ftype!r} misused with numeric op {op!r}")
 
-    # ATT&CK ids exist in the pinned local subset (existence only — not mapping quality)
-    ma = rule.get("mitre_attack") or {}
-    for tid in ma.get("tactics", []) or []:
+    # ATT&CK ids exist in the pinned local subset (existence only — not mapping quality).
+    # Guard the type: participant mitre_attack may be a list/string/scalar, on which
+    # .get() would raise AttributeError. A non-dict is a structural failure, not a crash.
+    ma = rule.get("mitre_attack")
+    if ma is None:
+        ma = {}
+    elif not isinstance(ma, dict):
+        l2.fail(f"mitre_attack must be a mapping, got {type(ma).__name__}")
+        ma = {}
+
+    def _id_list(key: str) -> list:
+        # A missing key is fine (optional). But a key that is PRESENT and not a
+        # list (scalar/dict/int) is malformed — fail it clearly rather than
+        # silently treating it as empty.
+        if key not in ma:
+            return []
+        v = ma.get(key)
+        if not isinstance(v, list):
+            l2.fail(f"mitre_attack.{key} must be a list, got {type(v).__name__}")
+            return []
+        return v
+
+    for tid in _id_list("tactics"):
         if not ATTACK_TACTIC_RE.match(str(tid)):
             l2.fail(f"ATT&CK tactic {tid!r} malformed (expect TAxxxx)")
         elif tid not in attack["tactics"]:
             l2.fail(f"ATT&CK tactic {tid!r} not in pinned subset {attack['version']}")
-    for tid in ma.get("techniques", []) or []:
+    for tid in _id_list("techniques"):
         if not ATTACK_TECH_RE.match(str(tid)):
             l2.fail(f"ATT&CK technique {tid!r} malformed (expect Txxxx)")
         elif tid not in attack["techniques"]:
             l2.fail(f"ATT&CK technique {tid!r} not in pinned subset {attack['version']}")
-    for tid in ma.get("subtechniques", []) or []:
+    for tid in _id_list("subtechniques"):
         if not ATTACK_SUBTECH_RE.match(str(tid)):
             l2.fail(f"ATT&CK sub-technique {tid!r} malformed (expect Txxxx.yyy)")
         elif tid not in attack["subtechniques"]:
@@ -530,7 +1004,7 @@ def validate_files(paths: list[str], levels: str, data_root: str) -> list[FileRe
             continue
         # Fixture references resolve against the DATA root (L1, deployable only).
         if levels in {"1", "all"} and rule is not None and is_deployable(rule):
-            validate_fixture_refs(rule, path, data_root, res.l1)
+            validate_fixture_refs(rule, path, data_root, res.l1, fd)
         if levels in {"2", "all"}:
             if rule is None:
                 res.l2.skipped = True

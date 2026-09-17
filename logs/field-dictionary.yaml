@@ -297,12 +297,12 @@ fields:
   - name: source.plane
     type: keyword
     families: [admin, network]
-    meaning: "Originating trust plane: corporate | workload | management (supports candidate #1)."
+    meaning: "Originating trust plane: edge | corporate | workload | management. Internet-facing traffic (carriers, external clients) enters via edge (supports candidate #1)."
     guaranteed: false
   - name: destination.plane
     type: keyword
     families: [admin, network]
-    meaning: "Target trust plane. A corporate/workload -> management crossing is notable (candidate #1)."
+    meaning: "Target trust plane: edge | corporate | workload | management. A corporate/workload -> management crossing is notable (candidate #1)."
     guaranteed: false
 
   # --- optional endpoint / process family -----------------------------------
