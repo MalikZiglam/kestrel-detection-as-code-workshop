@@ -1,0 +1,1 @@
+{"@timestamp":"2026-09-17T12:00:00Z","event.id":"team01-neg-001","event.action":"iam_change","event.outcome":"success","event.category":"iam","host.name":"idp.ctrl.example","cloud.api_operation":"PutRolePolicy","cloud.resource.type":"iam_role","cloud.resource.id":"kfc-operations-role","cloud.actor.principal":"approved-admin","cloud.actor.type":"user"}
