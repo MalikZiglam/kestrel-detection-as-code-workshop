@@ -1,58 +1,88 @@
-name: Successful Privileged Authentication After Multiple Failures
-id: auth-success-after-failures-admin
+id: privileged-auth-success-after-failures
+
+title: Privileged account login after multiple failed attempts
 
 status: production
-owner: leon.rohde
 
-description: >
-  Detects a successful authentication of a privileged account after
-  multiple failed authentication attempts from the same source.
-
-severity: high
-
-review_date: 2026-12-31
+owner: team-05
 
 deployment:
   enabled: true
 
-log_source:
-  product: custom
-  service: identity-provider
-  dataset: authentication
+description: >
+  Detects successful authentication of a privileged account after
+  multiple failed authentication attempts from the same source within
+  the enrichment window.
+
+business_rationale: >
+  A successful login after repeated failures may indicate password
+  guessing, credential stuffing, or brute force activity that
+  ultimately succeeded against a privileged account.
+
+evidence_refs:
+  - logs/authentication/README.md
+
+telemetry_requirements:
+  - authentication events containing event.action
+  - authentication.privileged enrichment
+  - workshop.enrichment.failed_logins_same_source_5m enrichment
+
+tuning_notes:
+  problem: >
+    Low thresholds can generate noise during normal user behaviour.
+  recommended_tuning: >
+    Keep the threshold at 5 or greater and focus on privileged accounts.
+  rollback: >
+    Disable deployment.enabled if false positives become excessive.
+
+severity: high
+
+log_source: identity
+
+query: >
+  event.category:authentication
+  and event.action:authentication_success
+  and authentication.privileged:true
+  and workshop.enrichment.failed_logins_same_source_5m:>=5
 
 mitre_attack:
   tactics:
-    - Credential Access
-    - Persistence
+    - TA0006
   techniques:
     - T1110
     - T1078
+  subtechniques: []
 
-query: |
-  event.action = "authentication_success"
-  AND authentication.privileged = true
-  AND workshop.enrichment.failed_logins_same_source_5m >= 5
+detection_strategy:
+  ids: []
+
+data_components:
+  ids:
+    - user-account-authentication
+
+false_positives:
+  - User repeatedly mistypes password before successful login.
+  - Administrator using outdated stored credentials before correction.
+
+known_exceptions: []
+
+investigation_guidance: >
+  Review source.ip, user.name, prior authentication failures,
+  geolocation, and recent privileged activity. Confirm whether the
+  login originated from a trusted device and expected location.
+
+tags:
+  - identity
+  - authentication
+  - privileged
+  - brute-force
+  - credential-access
 
 test_cases:
   positive:
-    - name: Admin login after brute force
-      event:
-        "@timestamp": "2024-11-12T08:05:09Z"
-        event.action: "authentication_success"
-        authentication.privileged: true
-        workshop.enrichment.failed_logins_same_source_5m: 6
-
+    - tests/team-05/positive/admin_success_after_failures.ndjson
   negative:
-    - name: Normal MFA admin login
-      event:
-        "@timestamp": "2024-11-12T07:31:44Z"
-        event.action: "authentication_success"
-        authentication.privileged: true
-        workshop.enrichment.failed_logins_same_source_5m: 0
+    - tests/team-05/negative/admin_normal_login.ndjson
+    - tests/team-05/negative/non_privileged_success.ndjson
 
-    - name: Non privileged user success
-      event:
-        "@timestamp": "2024-11-12T07:56:40Z"
-        event.action: "authentication_success"
-        authentication.privileged: false
-        workshop.enrichment.failed_logins_same_source_5m: 2
+review_date: 2026-12-01
