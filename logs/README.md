@@ -15,9 +15,10 @@ baseline context; there is no filler.
 
 All events use stable historical timestamps (2024-11-12 UTC) so correlations line
 up on the page: auth failures precede the success, flow-summary windows follow the
-foothold, IAM and app-access events sit in the same hours. **The replay layer
-rewrites `@timestamp` into each rule's evaluation window at deploy time (Phase 3).**
-Treat the absolute date as illustrative; treat the relative ordering as real.
+foothold, IAM and app-access events sit in the same hours. The replay layer
+rewrites `@timestamp` into each rule's evaluation window when events are ingested
+for runtime validation. Treat the absolute date as illustrative; treat the
+relative ordering as real.
 
 ## Files
 

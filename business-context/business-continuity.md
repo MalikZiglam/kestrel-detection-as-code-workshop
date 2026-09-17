@@ -1,6 +1,6 @@
 # Business Continuity — Kestrel Freight Cloud
 
-> Fictional and synthetic (WORKSHOP_SPEC.md §7.1). Invented content only.
+> Fictional and synthetic. Invented content only.
 
 Business continuity management (BCM) at KFC exists to keep carrier operations
 running through disruption and to recover quickly when prevention fails. This
@@ -55,6 +55,6 @@ continuity risk it cannot currently see (feeds candidate #7).
 
 Version-controlled detections are themselves a continuity asset. Because rules
 live in Git and deploy through Terraform, a bad rule that floods the SOC can be
-**reverted to a known-good state** on the same clock as any other change — this is
-the rollback lesson (§26). Continuity is not only about servers staying up; it is
+**reverted to a known-good state** on the same clock as any other change — the
+rollback discipline. Continuity is not only about servers staying up; it is
 about being able to trust, change, and restore the controls that protect them.

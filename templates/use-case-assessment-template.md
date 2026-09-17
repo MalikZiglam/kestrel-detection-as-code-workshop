@@ -1,6 +1,6 @@
 # Use-Case Assessment — team-NN
 
-Structure per `WORKSHOP_SPEC.md` §13.1. This artifact is the reasoning bridge
+This artifact is the reasoning bridge
 between evidence discovery and your detection rule: it records what you found,
 whether the telemetry can actually detect it, and why you picked the one you
 will engineer.

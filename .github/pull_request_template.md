@@ -1,5 +1,3 @@
-<!-- Phase 3 content — not yet generated. Placeholder PR template. -->
-
 ## Team
 
 - Team ID: `team-NN`
@@ -13,7 +11,7 @@
      - tests/workshop/<team-id>/*
      Touching any protected path (see docs/BRANCH-PROTECTION.md) fails CI. -->
 
-## PR review checklist (reviewer fills in — see docs, Phase 2/3)
+## PR review checklist (reviewer fills in)
 
 - [ ] Rule detects the behavior claimed
 - [ ] Referenced fields exist in supplied telemetry

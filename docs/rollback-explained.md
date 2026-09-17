@@ -53,7 +53,8 @@ that:
 - the result is **verifiable** (`verify_baseline.py` proves the environment
   returned to the expected state).
 
-A rollback you cannot verify is a hope, not a control.
+If you cannot verify the reconciliation, you have not rolled back — you have
+changed a file and assumed the rest.
 
 ## For the workshop
 
