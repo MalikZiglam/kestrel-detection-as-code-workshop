@@ -1,0 +1,1 @@
+{"@timestamp":"2024-11-12T07:56:40Z","event.id":"team05-neg-01","event.action":"authentication_success","event.outcome":"success","event.category":"authentication","host.name":"idp.ctrl.example","user.name":"a.mensah","source.ip":"198.51.100.20","authentication.method":"password","authentication.privileged":false}

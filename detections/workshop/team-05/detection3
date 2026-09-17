@@ -1,0 +1,73 @@
+id: privileged-authentication-event
+
+title: Privileged authentication event
+
+status: production
+
+owner: team-05
+
+deployment:
+  enabled: true
+
+description: >
+  Detects authentication events involving privileged accounts.
+
+business_rationale: >
+  Actions involving privileged identities warrant additional visibility.
+
+evidence_refs:
+  - logs/authentication/README.md
+
+telemetry_requirements:
+  - authentication events
+  - authentication.privileged enrichment
+
+tuning_notes:
+  problem: >
+    May generate alerts for expected administrative work.
+  recommended_tuning: >
+    Scope to specific authentication methods or sources.
+  rollback: >
+    Disable deployment if operationally noisy.
+
+severity: low
+
+log_source: identity
+
+query: >
+  event.category: authentication
+  and authentication.privileged: true
+
+mitre_attack:
+  tactics:
+    - TA0006
+  techniques:
+    - T1078
+  subtechniques: []
+
+detection_strategy:
+  ids: []
+
+data_components:
+  ids:
+    - user-account-authentication
+
+false_positives:
+  - Normal privileged account usage.
+
+known_exceptions: []
+
+investigation_guidance: >
+  Review account activity and authentication context.
+
+tags:
+  - identity
+  - authentication
+
+test_cases:
+  positive:
+    - tests/workshop/team-05/positive.ndjson
+  negative:
+    - tests/workshop/team-05/negative.ndjson
+
+review_date: 2026-12-01

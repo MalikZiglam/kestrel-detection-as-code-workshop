@@ -1,6 +1,6 @@
-id: privileged-auth-success-after-failures
+id: privileged-authentication-success
 
-title: Privileged account login after multiple failed attempts
+title: Privileged authentication success
 
 status: production
 
@@ -13,9 +13,7 @@ description: >
   Detects successful authentication of a privileged account.
 
 business_rationale: >
-  Privileged account access represents a higher risk than standard user
-  authentication and should be monitored to identify potentially
-  suspicious activity.
+  Privileged account access should be monitored due to its elevated impact.
 
 evidence_refs:
   - logs/authentication/README.md
@@ -26,20 +24,18 @@ telemetry_requirements:
 
 tuning_notes:
   problem: >
-    Monitoring all privileged logins can generate analyst workload.
+    Legitimate administrator activity may generate alerts.
   recommended_tuning: >
-    Consider adding enrichment-based thresholds or source IP filtering if
-    supported by the query language.
+    Combine with source IP reputation or failure history.
   rollback: >
-    Set deployment.enabled to false if excessive alert volume is observed.
+    Disable deployment if alert volume becomes excessive.
 
 severity: medium
 
 log_source: identity
 
 query: >
-  event.category: authentication
-  and event.action: authentication_success
+  event.action: authentication_success
   and authentication.privileged: true
 
 mitre_attack:
@@ -57,14 +53,12 @@ data_components:
     - user-account-authentication
 
 false_positives:
-  - Legitimate administrator logins.
-  - Scheduled privileged operational activities.
+  - Legitimate administrator activity.
 
 known_exceptions: []
 
 investigation_guidance: >
-  Review source.ip, authentication.method, user.name, and recent login
-  history to determine whether the activity is expected.
+  Validate source IP and user activity.
 
 tags:
   - identity
