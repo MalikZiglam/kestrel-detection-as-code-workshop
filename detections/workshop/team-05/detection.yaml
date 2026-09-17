@@ -1,45 +1,20 @@
-title: Account Added and Removed from Privileged Groups
-id: 7efc75ce-e2a4-400f-a8b1-283d3b0f2c60
-status: experimental
-description: >
-  Detects accounts that are added to a privileged group and subsequently
-  removed from the same privileged group within a short period of time.
-  This may indicate privilege abuse, attacker testing, or privilege
-  escalation attempts.
-
-references:
-  - https://github.com/Azure/Azure-Sentinel/blob/master/Detections/SecurityEvent/UserAccountAdd-Removed.yaml
-
-author: Microsoft Security Research
-date: 2024-01-01
-modified: 2026-09-17
-
-tags:
-  - attack.persistence
-  - attack.privilege-escalation
-  - attack.t1098
-  - attack.t1078
+title: Successful Privileged Authentication After Multiple Failures
+id: 3e2f5f08-8c84-4ef7-a15f-auth-bruteforce
 
 logsource:
-  product: windows
-  service: security
+  product: custom
+  category: authentication
 
 detection:
-  add_to_privileged_group:
-    EventID:
-      - 4728   # Member added to global security-enabled group
-      - 4732   # Member added to local security-enabled group
-      - 4756   # Member added to universal security-enabled group
+  selection:
+    event.action: authentication_success
+    authentication.privileged: true
+    workshop.enrichment.failed_logins_same_source_5m|gte: 5
 
-  remove_from_privileged_group:
-    EventID:
-      - 4729   # Member removed from global security-enabled group
-      - 4733   # Member removed from local security-enabled group
-      - 4757   # Member removed from universal security-enabled group
+  condition: selection
 
-falsepositives:
-  - Administrative maintenance
-  - Automated provisioning/deprovisioning workflows
-  - Privileged Access Management solutions
+level: high
 
-level: low
+tags:
+  - attack.t1078
+  - attack.t1110
