@@ -1,6 +1,6 @@
-id: privileged-authentication-failure
+id: privileged-authentication-success
 
-title: Privileged account authentication failure
+title: Privileged authentication success
 
 status: production
 
@@ -10,12 +10,10 @@ deployment:
   enabled: true
 
 description: >
-  Detects failed authentication attempts involving privileged accounts.
+  Detects successful authentication of a privileged account.
 
 business_rationale: >
-  Authentication failures against privileged accounts may indicate password
-  guessing, credential stuffing, brute force activity, or unauthorized access
-  attempts.
+  Privileged account access should be monitored due to its elevated impact.
 
 evidence_refs:
   - logs/authentication/README.md
@@ -26,26 +24,25 @@ telemetry_requirements:
 
 tuning_notes:
   problem: >
-    Administrators occasionally mistype passwords, creating benign failures.
+    Legitimate administrator activity may generate alerts.
   recommended_tuning: >
-    Consider correlating repeated failures from the same source IP.
+    Combine with source IP reputation or failure history.
   rollback: >
-    Set deployment.enabled to false if excessive alert volume occurs.
+    Disable deployment if alert volume becomes excessive.
 
 severity: medium
 
 log_source: identity
 
 query: >
-  event.category: authentication
-  and event.action: authentication_failure
+  event.action: authentication_success
   and authentication.privileged: true
 
 mitre_attack:
   tactics:
     - TA0006
   techniques:
-    - T1110
+    - T1078
   subtechniques: []
 
 detection_strategy:
@@ -56,14 +53,12 @@ data_components:
     - user-account-authentication
 
 false_positives:
-  - Administrator password typo.
-  - Expired credentials.
+  - Legitimate administrator activity.
 
 known_exceptions: []
 
 investigation_guidance: >
-  Review source.ip, user.name, and related authentication activity for signs
-  of brute force or account compromise.
+  Validate source IP and user activity.
 
 tags:
   - identity
