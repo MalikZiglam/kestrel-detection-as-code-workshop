@@ -6,12 +6,12 @@ id: team01-logging-pipeline-interference
 
 title: Logging Pipeline Interference
 
-status: draft
+status: test
 
 owner: team-01
 
 deployment:
-  enabled: false
+  enabled: true
 
 description: >
   Detects a cloud control-plane operation that stops a log stream feeding the
