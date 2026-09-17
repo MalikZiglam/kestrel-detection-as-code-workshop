@@ -1,57 +1,42 @@
 # =============================================================================
 # TEAM 01 — DETECTION WORKSPACE
 # =============================================================================
-# Work directly in this file.
-#
-# Start in draft mode while you investigate and design.
-#
-# Before your Pull Request is ready:
-#   1. Replace the title and description with your selected use case.
-#   2. Update severity.
-#   3. Set log_source to the telemetry family you are using.
-#   4. Replace the example query with your detection logic.
-#   5. Add the evidence files that support your detection.
-#   6. Create:
-#        tests/workshop/team-01/positive.ndjson
-#        tests/workshop/team-01/negative.ndjson
-#   7. When ready for validation/deployment, change:
-#        status: test
-#        deployment.enabled: true
-#
-# Use only fields documented in logs/field-dictionary.md.
-# Do not specify indices, endpoints, credentials, or Elastic targets.
-# =============================================================================
 
-id: team01-draft-detection
+id: team01-logging-pipeline-interference
 
-title: Team 01 detection — replace with selected use case
+title: Logging Pipeline Interference
 
-status: draft
+status: test
 
 owner: team-01
 
 deployment:
-  enabled: false
+  enabled: true
 
 description: >
-  Replace this text with a precise description of the behavior this detection
-  is intended to identify.
+  Detects a cloud control-plane operation that stops a log stream feeding the
+  security monitoring pipeline.
 
 business_rationale: >
-  Replace this text with the business or security impact of detecting this
-  behavior.
+  Stopping a security log stream creates a visibility gap in which subsequent
+  attacker activity may go unobserved, delaying detection and investigation.
 
-evidence_refs: []
+evidence_refs:
+  - evidence/threat-brief.md
+  - evidence/pentest-purple-team-findings.md
 
-telemetry_requirements: []
+telemetry_requirements:
+  - cloud.api_operation
+  - cloud.resource.type
+  - cloud.actor.principal
 
-severity: medium
+severity: high
 
-log_source: identity
+log_source: cloud
 
 query: >
-  event.category: authentication
-  and event.action: authentication_success
+  cloud.api_operation: "StopLogStream"
+  and cloud.resource.type: "log_stream"
 
 mitre_attack:
   tactics: []
@@ -64,16 +49,24 @@ detection_strategy:
 data_components:
   ids: []
 
-false_positives: []
+false_positives:
+  - Authorized maintenance or troubleshooting that temporarily stops a logging stream.
+  - Approved administrative changes to the logging pipeline.
 
 known_exceptions: []
 
 investigation_guidance: >
-  Describe what an analyst should inspect after this rule generates an alert.
+  Identify the principal recorded in cloud.actor.principal and verify whether
+  the StopLogStream operation was authorized. Review the targeted resource,
+  related cloud control-plane activity, subsequent changes by the same
+  principal, and activity occurring during the resulting logging gap.
 
 tags:
   - workshop
   - team-01
+  - cloud
+  - logging
+  - defense-evasion
 
 test_cases:
   positive:
