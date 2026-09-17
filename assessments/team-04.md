@@ -32,15 +32,15 @@ will engineer.
   detectability, and effort.
 
 ## Candidate 1
-- Security problem:
-- Supporting evidence:
+- Security problem: Brute Force
+- Supporting evidence: Incident postmortam
 - Business impact:
 - Available telemetry:
 - Detectability:
-- Priority / rationale:
+- Priority / rationale: high
 
 ## Candidate 2
-- Security problem:
+- Security problem: No Prio von priv account
 - Supporting evidence:
 - Business impact:
 - Available telemetry:
@@ -48,12 +48,12 @@ will engineer.
 - Priority / rationale:
 
 ## Candidate 3
-- Security problem:
-- Supporting evidence:
-- Business impact:
+- Security problem: Privilege escaltion
+- Supporting evidence: Pentest/purple team
+- Business impact: high
 - Available telemetry:
 - Detectability:
-- Priority / rationale:
+- Priority / rationale: high
 
 ## Selected use case
 - Which candidate (1 / 2 / 3):
