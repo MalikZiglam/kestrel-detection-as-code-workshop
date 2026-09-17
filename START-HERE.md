@@ -6,7 +6,7 @@ version-controlled detection**, shipped through a real branch → PR → CI → 
 deploy lifecycle in 90 minutes.
 
 New to Git? Read [`docs/github-survival-guide.md`](docs/github-survival-guide.md)
-first — everything is browser-only, no command line.
+first, everything is browser-only.
 
 ## Pick your route
 
