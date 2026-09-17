@@ -1,6 +1,6 @@
-id: privileged-password-authentication
+id: privileged-authentication-event
 
-title: Privileged account password authentication
+title: Privileged authentication event
 
 status: production
 
@@ -10,42 +10,36 @@ deployment:
   enabled: true
 
 description: >
-  Detects successful password-based authentication to a privileged account.
+  Detects authentication events involving privileged accounts.
 
 business_rationale: >
-  Password-based authentication for privileged accounts may warrant
-  additional visibility because stronger methods such as MFA are generally
-  preferred.
+  Actions involving privileged identities warrant additional visibility.
 
 evidence_refs:
   - logs/authentication/README.md
 
 telemetry_requirements:
-  - authentication events with event.action
-  - authentication.method field
+  - authentication events
   - authentication.privileged enrichment
 
 tuning_notes:
   problem: >
-    Legitimate administrator activity may generate alerts.
+    May generate alerts for expected administrative work.
   recommended_tuning: >
-    Focus on unusual source IP addresses or enrich with historical activity.
+    Scope to specific authentication methods or sources.
   rollback: >
-    Disable deployment if alert volume exceeds operational capacity.
+    Disable deployment if operationally noisy.
 
-severity: medium
+severity: low
 
 log_source: identity
 
 query: >
   event.category: authentication
-  and event.action: authentication_success
-  and authentication.method: password
   and authentication.privileged: true
 
 mitre_attack:
   tactics:
-    - TA0001
     - TA0006
   techniques:
     - T1078
@@ -59,20 +53,16 @@ data_components:
     - user-account-authentication
 
 false_positives:
-  - Normal administrator sign-in activity.
-  - Approved operational maintenance.
+  - Normal privileged account usage.
 
 known_exceptions: []
 
 investigation_guidance: >
-  Validate the source IP, user identity, authentication history, and expected
-  administrative activity.
+  Review account activity and authentication context.
 
 tags:
   - identity
   - authentication
-  - privileged
-  - password
 
 test_cases:
   positive:
@@ -81,4 +71,3 @@ test_cases:
     - tests/workshop/team-05/negative.ndjson
 
 review_date: 2026-12-01
-``
