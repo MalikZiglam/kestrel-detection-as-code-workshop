@@ -1,0 +1,79 @@
+id: privileged-authentication-failure
+
+title: Privileged account authentication failure
+
+status: production
+
+owner: team-05
+
+deployment:
+  enabled: true
+
+description: >
+  Detects failed authentication attempts involving privileged accounts.
+
+business_rationale: >
+  Authentication failures against privileged accounts may indicate password
+  guessing, credential stuffing, brute force activity, or unauthorized access
+  attempts.
+
+evidence_refs:
+  - logs/authentication/README.md
+
+telemetry_requirements:
+  - authentication events with event.action
+  - authentication.privileged enrichment
+
+tuning_notes:
+  problem: >
+    Administrators occasionally mistype passwords, creating benign failures.
+  recommended_tuning: >
+    Consider correlating repeated failures from the same source IP.
+  rollback: >
+    Set deployment.enabled to false if excessive alert volume occurs.
+
+severity: medium
+
+log_source: identity
+
+query: >
+  event.category: authentication
+  and event.action: authentication_failure
+  and authentication.privileged: true
+
+mitre_attack:
+  tactics:
+    - TA0006
+  techniques:
+    - T1110
+  subtechniques: []
+
+detection_strategy:
+  ids: []
+
+data_components:
+  ids:
+    - user-account-authentication
+
+false_positives:
+  - Administrator password typo.
+  - Expired credentials.
+
+known_exceptions: []
+
+investigation_guidance: >
+  Review source.ip, user.name, and related authentication activity for signs
+  of brute force or account compromise.
+
+tags:
+  - identity
+  - authentication
+  - privileged
+
+test_cases:
+  positive:
+    - tests/workshop/team-05/positive.ndjson
+  negative:
+    - tests/workshop/team-05/negative.ndjson
+
+review_date: 2026-12-01
